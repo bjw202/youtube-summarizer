@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body {
+  font-family: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  color: #171B1F;
+  background: #ffffff;
+  line-height: 1.75;
+}
+
+/* ── Article Container ── */
+.article-wrapper {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* ── Category Badge ── */
+.category-badge {
+  display: inline-block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fc1c49;
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+
+/* ── Title Section ── */
+.article-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #171B1F;
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+}
+.article-title a {
+  color: inherit;
+  text-decoration: none;
+}
+.article-title a:hover {
+  color: #0066FF;
+}
+
+/* ── Meta Info ── */
+.meta-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 0.8125rem;
+  color: #747678;
+  margin-bottom: 12px;
+}
+.meta-bar span { display: inline-flex; align-items: center; gap: 4px; }
+.meta-bar .label { font-weight: 600; color: #4B4D4F; }
+
+/* ── Tags ── */
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 28px;
+}
+.tag-list .tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #747678;
+  background: #F5F5F6;
+  padding: 3px 10px;
+  border-radius: 4px;
+}
+
+/* ── Divider ── */
+.divider {
+  border: none;
+  border-top: 1px solid #E7E7E8;
+  margin: 28px 0;
+}
+
+/* ── TOC (Table of Contents) ── */
+.toc {
+  background: #F5F5F6;
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin-bottom: 32px;
+}
+.toc-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #171B1F;
+  margin-bottom: 12px;
+}
+.toc-list {
+  list-style: none;
+  counter-reset: toc-counter;
+}
+.toc-list li {
+  counter-increment: toc-counter;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: #4B4D4F;
+  padding: 4px 0;
+}
+.toc-list li::before {
+  content: counter(toc-counter) ". ";
+  font-weight: 600;
+  color: #171B1F;
+}
+.toc-list a {
+  color: #4B4D4F;
+  text-decoration: none;
+}
+.toc-list a:hover {
+  color: #0066FF;
+}
+
+/* ── Chapter Section ── */
+.chapter {
+  margin-bottom: 40px;
+}
+.chapter:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Chapter Heading ── */
+.chapter-heading {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #171B1F;
+  line-height: 1.45;
+  letter-spacing: -0.015em;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #E7E7E8;
+}
+.chapter-time {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #747678;
+  margin-left: 8px;
+}
+
+/* ── Chapter Image ── */
+.chapter-image {
+  margin: 20px 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.chapter-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.chapter-image-caption {
+  font-size: 0.75rem;
+  color: #747678;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* ── Summary Bullets ── */
+.summary-list {
+  list-style: none;
+  padding: 0;
+}
+.summary-list li {
+  position: relative;
+  font-size: 0.9375rem;
+  color: #4B4D4F;
+  line-height: 1.75;
+  padding-left: 16px;
+  margin-bottom: 8px;
+}
+.summary-list li::before {
+  content: "\2022";
+  position: absolute;
+  left: 0;
+  color: #fc1c49;
+  font-weight: 700;
+}
+
+/* ── Footer ── */
+.article-footer {
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 1px solid #E7E7E8;
+  font-size: 0.75rem;
+  color: #747678;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.youtube-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0066FF;
+  text-decoration: none;
+}
+.youtube-link:hover { text-decoration: underline; }
+.youtube-link svg { width: 18px; height: 18px; }
+
+/* ── Responsive ── */
+@media (max-width: 720px) {
+  .article-wrapper { padding: 0 16px; }
+  .article-title { font-size: 1.375rem; }
+  .chapter-heading { font-size: 1.125rem; }
+}
+
+/* ── Dark Mode ── */
+@media (prefers-color-scheme: dark) {
+  body { background: #1a1a1a; color: #e0e0e0; }
+  .category-badge { color: #ff5a7a; }
+  .article-title { color: #f0f0f0; }
+  .article-title a:hover { color: #5c9aff; }
+  .meta-bar { color: #999; }
+  .meta-bar .label { color: #bbb; }
+  .tag-list .tag { background: #2a2a2a; color: #999; }
+  .divider { border-top-color: #333; }
+  .toc { background: #222; }
+  .toc-title { color: #f0f0f0; }
+  .toc-list li { color: #aaa; }
+  .toc-list li::before { color: #f0f0f0; }
+  .toc-list a { color: #aaa; }
+  .toc-list a:hover { color: #5c9aff; }
+  .chapter-heading { color: #f0f0f0; border-bottom-color: #333; }
+  .chapter-time { color: #888; }
+  .chapter-image-caption { color: #888; }
+  .summary-list li { color: #c0c0c0; }
+  .summary-list li::before { color: #ff5a7a; }
+  .article-footer { border-top-color: #333; color: #888; }
+  .youtube-link { color: #5c9aff; }
+}
+</style>
+</head>
+<body>
+
+<div class="article-wrapper">
+
+  <!-- Category Badge -->
+  <span class="category-badge">YouTube 요약</span>
+
+  <!-- Title (links to original YouTube video) -->
+  <h1 class="article-title">
+    <a href="{{URL}}" target="_blank" rel="noopener">{{TITLE}}</a>
+  </h1>
+
+  <!-- Meta Info -->
+  <div class="meta-bar">
+    <span><span class="label">채널</span> {{CHANNEL}}</span>
+    <span><span class="label">길이</span> {{DURATION}}</span>
+    <span><span class="label">요약 수준</span> {{SUMMARY_LEVEL}}</span>
+  </div>
+
+  <!-- Tags (chapter titles) -->
+  <div class="tag-list">
+    {{TAGS}}
+  </div>
+
+  <hr class="divider">
+
+  <!-- Table of Contents -->
+  <nav class="toc">
+    <div class="toc-title">목차</div>
+    <ol class="toc-list">
+      {{TOC}}
+    </ol>
+  </nav>
+
+  <!-- Chapter Content -->
+  {{CHAPTERS}}
+
+  <!-- Footer -->
+  <div class="article-footer">
+    <span>생성일: {{TIMESTAMP}}</span>
+    <a class="youtube-link" href="{{URL}}" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+      원본 영상 보기
+    </a>
+  </div>
+
+</div>
+
+</body>
+</html>

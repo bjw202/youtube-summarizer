@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Large intermediate files
+**/_work/frame-source.mp4
+**/_work/frames/
+**/_work/contact-sheets/*-sheet-*.jpg
+**/_work/captions/
