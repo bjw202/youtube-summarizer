@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from common import HarnessError, existing_work_dir, read_json, require_executable, run, write_json
+from common import HarnessError, build_yt_dlp_video_args, existing_work_dir, read_json, require_executable, run, write_json
 
 
 DEFAULT_FORMAT = "bv*[height<=720][ext=mp4]/bv*[height<=720]/bv*[height<=480][ext=mp4]/bv*[height<=480]/worstvideo"
@@ -27,8 +27,12 @@ def main() -> int:
     for old_part in internal_dir.glob("frame-source.*.part"):
         old_part.unlink()
 
+    # Video data uses impersonation only (no --remote-components): the EJS
+    # plugin interferes with the SABR-bypassing player clients yt-dlp falls
+    # back to, and a 403 follows. See common.build_yt_dlp_video_args.
+    base = build_yt_dlp_video_args(yt_dlp)
     cmd = [
-        yt_dlp,
+        *base,
         "-f",
         args.format,
         "--no-playlist",

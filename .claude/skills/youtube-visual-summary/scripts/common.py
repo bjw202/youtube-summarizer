@@ -68,6 +68,78 @@ def find_executable(name: str) -> str | None:
     return None
 
 
+def find_js_runtime() -> str | None:
+    """Return the first available JS runtime (deno preferred over node)."""
+    for name in ("deno", "node"):
+        if shutil.which(name):
+            return name
+    return None
+
+
+def has_impersonation() -> bool:
+    """True if curl_cffi is importable in this interpreter.
+
+    curl_cffi (installed via the yt-dlp[curl-cffi] extra) is what lets yt-dlp
+    impersonate a real browser. Without it YouTube's bot detection returns
+    HTTP 403/429 and downloads fail.
+    """
+    try:
+        import curl_cffi  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+_remote_components_supported: bool | None = None
+
+
+def supports_remote_components(yt_dlp: str) -> bool:
+    """Detect once whether this yt-dlp build accepts --remote-components."""
+    global _remote_components_supported
+    if _remote_components_supported is None:
+        try:
+            proc = run([yt_dlp, "--help"])
+            _remote_components_supported = "--remote-components" in proc.stdout
+        except Exception:
+            _remote_components_supported = False
+    return _remote_components_supported
+
+
+def build_yt_dlp_base_args(yt_dlp: str) -> list[str]:
+    """Build the base yt-dlp args for metadata + caption fetches.
+
+    - ``--remote-components ejs:github``: when a JS runtime (deno/node) is
+      present and yt-dlp supports it, let yt-dlp-ejs solve YouTube's EJS
+      challenge ("The page needs to be reloaded").
+    - ``--impersonate chrome``: when curl_cffi is importable, impersonate a
+      browser to avoid YouTube 403/429 bot-detection.
+    """
+    args = [yt_dlp]
+    if find_js_runtime() and supports_remote_components(yt_dlp):
+        args.append("--remote-components")
+        args.append("ejs:github")
+    if has_impersonation():
+        args.append("--impersonate")
+        args.append("chrome")
+    return args
+
+
+def build_yt_dlp_video_args(yt_dlp: str) -> list[str]:
+    """Build yt-dlp args for downloading *video data* — impersonation only.
+
+    Do NOT pass ``--remote-components`` here. The EJS plugin interferes with
+    the SABR-bypassing player clients (e.g. android_vr) that yt-dlp falls
+    back to once YouTube enables SABR-only streaming (#12482): with the flag
+    on, those clients are skipped and the download 403s. Video data is not
+    behind the EJS challenge, so impersonation alone is sufficient.
+    """
+    args = [yt_dlp]
+    if has_impersonation():
+        args.append("--impersonate")
+        args.append("chrome")
+    return args
+
+
 def slugify(value: str, max_len: int = 80) -> str:
     value = re.sub(r"[^\w\s.-]+", "", value, flags=re.UNICODE)
     value = re.sub(r"\s+", "-", value.strip())

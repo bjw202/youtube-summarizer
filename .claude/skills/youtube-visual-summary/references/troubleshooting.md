@@ -38,7 +38,9 @@ curl -fsSL https://deno.land/install.sh | sh
 
 Then add `$HOME/.deno/bin` to your PATH. Alternatively, install Node.js which also works.
 
-The `fetch_youtube.py` script automatically adds `--remote-components ejs:github` when a JS runtime is detected, so no manual action is needed beyond installing the runtime.
+`fetch_youtube.py` automatically adds `--remote-components ejs:github` (EJS challenge) and `--impersonate chrome` (429 relief) when a JS runtime and `curl_cffi` are present. Installing the runtime is the only manual step.
+
+Note: `--remote-components` is still a current yt-dlp flag (not removed). The EJS challenge ("The page needs to be reloaded") is solved by the **`yt-dlp-ejs` plugin** — bundled via the `yt-dlp[default]` extra — executing JS in deno. yt-dlp alone cannot solve it.
 
 ## No Captions
 
@@ -52,13 +54,25 @@ Do not silently fall back to STT.
 
 ## Caption Download 429 (Too Many Requests)
 
-YouTube rate-limits subtitle downloads. The script now handles this by:
+YouTube's bot detection returns 429 to non-browser clients. **Browser impersonation (`curl_cffi`) is the primary defense** — without it, caption (and often metadata) downloads fail repeatedly. Verify it is active:
 
-1. Downloading each language individually (ko first, then en)
+```bash
+.venv/bin/yt-dlp --list-impersonate-targets   # should list Chrome/Safari rows, not "(unavailable)"
+```
+
+If all targets show `unavailable`, curl_cffi is missing or the wrong version. yt-dlp pins `curl-cffi <0.16`, so installing 0.16+ by hand silently disables impersonation. Reinstall with the pinned extra:
+
+```bash
+python3 skills/youtube-visual-summary/scripts/setup_venv.py   # installs yt-dlp[default,curl-cffi]
+```
+
+On top of impersonation, the script mitigates 429 by:
+
+1. Downloading each language individually (ko, then en)
 2. Retrying up to 2 times with exponential backoff (3s, 6s)
 3. Continuing with partial results — if at least one language succeeds, the workflow proceeds
 
-If all languages fail with 429, wait a few minutes and retry:
+If 429 still persists across all languages (e.g. you hit a translation-subtitle CDN that is rate-limiting hard), wait a few minutes and retry:
 
 ```bash
 .venv/bin/python skills/youtube-visual-summary/scripts/fetch_youtube.py "URL" --run-root runs

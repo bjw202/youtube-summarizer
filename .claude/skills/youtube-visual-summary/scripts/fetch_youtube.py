@@ -4,30 +4,11 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import shutil
-import subprocess
 import sys
 import time
 from pathlib import Path
 
-from common import require_executable, run, slugify, work_dir, write_json
-
-
-def find_js_runtime() -> str | None:
-    """Return the first available JS runtime (deno preferred over node)."""
-    for name in ("deno", "node"):
-        if shutil.which(name):
-            return name
-    return None
-
-
-def build_yt_dlp_base_args(yt_dlp: str) -> list[str]:
-    """Build base yt-dlp args including --remote-components if a JS runtime is present."""
-    args = [yt_dlp]
-    if find_js_runtime():
-        args.append("--remote-components")
-        args.append("ejs:github")
-    return args
+from common import build_yt_dlp_base_args, require_executable, run, slugify, work_dir, write_json
 
 
 def fetch_metadata(yt_dlp: str, url: str) -> dict:
