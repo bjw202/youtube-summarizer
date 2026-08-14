@@ -17,6 +17,7 @@ Why yt-dlp[default,curl-cffi]:
 from __future__ import annotations
 
 import argparse
+import platform
 import shutil
 import subprocess
 import sys
@@ -27,6 +28,11 @@ from pathlib import Path
 # yt-dlp[default,curl-cffi] = yt-dlp + yt-dlp-ejs (EJS challenge) + curl_cffi
 # (browser impersonation / 429 relief) + brotli/requests/etc.
 PACKAGES = ["yt-dlp[default,curl-cffi]", "Pillow", "pydantic", "rich", "PyYAML"]
+
+# mlx-whisper 는 Apple Silicon 전용 로컬 STT — 자막이 없는 영상의 전사 폴백.
+# 다른 플랫폼(Linux/Windows/x86)에서는 설치를 건너뛴다(mlx 미지원).
+if sys.platform == "darwin" and platform.machine() == "arm64":
+    PACKAGES.append("mlx-whisper")
 
 MIN_PYTHON = (3, 10)
 

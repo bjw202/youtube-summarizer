@@ -70,7 +70,20 @@ stdout에서 run 디렉토리 경로를 읽는다.
 .venv/bin/python .claude/skills/youtube-visual-summary/scripts/build_transcript.py RUN_DIR
 ```
 
-실패(자막 없음) 시 텍스트 전용 모드로 전환하거나 선택적 STT를 제안한다. 기본적으로 STT는 MVP 범위 밖이다.
+**자막이 없어 실패하면 STT 폴백** (`env_check.py --json`의 `has_stt`가 `true`일 때, Apple Silicon mlx-whisper):
+
+```bash
+# 1. 오디오만 다운로드 (impersonation 필수 — 비디오와 같은 403/429 이유)
+.venv/bin/yt-dlp -f "ba" -x --audio-format mp3 --no-playlist --impersonate chrome \
+  -o RUN_DIR/_work/audio.%(ext)s "URL"
+
+# 2. mlx-whisper 전사 (한국어 영상은 --language ko 로 도메인 용어 prompt 주입; 영어 등은 생략 시 자동 감지)
+.venv/bin/python .claude/skills/youtube-visual-summary/scripts/stt_transcribe.py RUN_DIR/_work/audio.mp3 RUN_DIR "URL" --language ko
+```
+
+- 10분 청크 캐시(`_work/stt_chunks/`)로 **재개 가능** — 긴 영상(3시간 라이브 등)도 중단 후 같은 명령으로 이어서.
+- 결과는 `source: stt-mlx-whisper`인 `transcript.json` → 이후 Phase 4~ 파이프라인을 그대로 재사용.
+- STT가 없는 환경(비 Apple Silicon)이거나 사용자가 거부하면 텍스트 전용 모드로 진행한다.
 
 ### Phase 4: 콘텐츠 분석 (Claude 직접 수행)
 
@@ -277,7 +290,7 @@ E|-------------------|
 
 ## 캡션 정책
 
-우선순위: 수동 한국어 > 수동 영어 > 자동 생성 > 다른 언어. 자막이 없으면 기본 실패 + 선택적 STT 제안.
+우선순위: 수동 한국어 > 수동 영어 > 자동 생성 > 다른 언어. 자막이 없으면 STT 폴백(`stt_transcribe.py`, Apple Silicon mlx-whisper)으로 전사하고, STT 불가 시 텍스트 전용 모드.
 
 ## 환경 정책
 
@@ -287,7 +300,7 @@ E|-------------------|
 
 | 상황 | 대응 |
 |------|------|
-| 자막 없음 | 텍스트 전용으로 전환, STT 제안 |
+| 자막 없음 | STT 폴백(`stt_transcribe.py`)으로 전사; STT 불가(비 Apple Silicon 등) 시 텍스트 전용 |
 | 자막 일부 실패 (429) | 성공한 언어로 계속 진행, 실패 언어는 경고만 |
 | 프레임 추출 실패 | 텍스트 전용으로 진행 |
 | yt-dlp 실패 | 네트워크/권한 안내 |

@@ -44,13 +44,30 @@ Note: `--remote-components` is still a current yt-dlp flag (not removed). The EJ
 
 ## No Captions
 
-Default behavior:
+자막(수동/자동 모두)이 하나도 없으면 STT 폴백으로 전사한다. Apple Silicon의 mlx-whisper를 쓴다(비 Apple Silicon에서는 불가 → 텍스트 전용).
 
-- Stop the workflow.
-- Tell the user no manual or auto captions were available.
-- Offer optional local STT only if they accept audio extraction, model download, and longer runtime.
+**사전 확인:**
 
-Do not silently fall back to STT.
+```bash
+.venv/bin/python skills/youtube-visual-summary/scripts/env_check.py --json
+```
+
+`has_stt` 가 `true` 면 폴백 가능.
+
+**폴백 절차:**
+
+```bash
+# 1. 오디오만 다운로드 (impersonation 필수 — 비디오와 같은 403/429 이유)
+.venv/bin/yt-dlp -f "ba" -x --audio-format mp3 --no-playlist --impersonate chrome \
+  -o RUN_DIR/_work/audio.%(ext)s "URL"
+
+# 2. mlx-whisper 전사 (한국어 영상은 --language ko; 영어 등은 생략 시 자동 감지)
+.venv/bin/python skills/youtube-visual-summary/scripts/stt_transcribe.py RUN_DIR/_work/audio.mp3 RUN_DIR "URL" --language ko
+```
+
+- 10분 청크 캐시(`_work/stt_chunks/`)로 재개 가능. 중단되면 같은 명령으로 이어서.
+- 결과는 `build_transcript.py` 호환 `transcript.json` → 이후 chapters/프레임/render 파이프라인을 동일하게 재사용.
+- 비 Apple Silicon이거나 사용자가 STT를 거부하면 텍스트 전용 모드로 진행.
 
 ## Caption Download 429 (Too Many Requests)
 

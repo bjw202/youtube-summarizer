@@ -26,7 +26,6 @@ def module_available(name: str) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", action="store_true", help="print machine-readable status")
-    parser.add_argument("--include-stt", action="store_true", help="also check optional STT modules")
     args = parser.parse_args()
 
     data = {
@@ -35,12 +34,8 @@ def main() -> int:
         "recommended_modules": {name: module_available(name) for name in RECOMMENDED_MODULES},
         "caption_modules": {name: module_available(name) for name in CAPTION_MODULES},
         "js_runtimes": {name: shutil.which(name) for name in JS_RUNTIMES},
-        "optional_stt": {},
+        "stt": {"mlx_whisper": module_available("mlx_whisper")},
     }
-    if args.include_stt:
-        data["optional_stt"] = {
-            "faster_whisper": module_available("faster_whisper"),
-        }
 
     missing_required = [
         name for name, path in data["executables"].items() if not path
@@ -48,6 +43,7 @@ def main() -> int:
         name for name, ok in data["required_modules"].items() if not ok
     ]
     data["has_js_runtime"] = any(data["js_runtimes"].values())
+    data["has_stt"] = data["stt"]["mlx_whisper"]
     data["ok"] = not missing_required
     data["missing_required"] = missing_required
 
