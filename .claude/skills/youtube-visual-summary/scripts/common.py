@@ -132,11 +132,25 @@ def build_yt_dlp_video_args(yt_dlp: str) -> list[str]:
     back to once YouTube enables SABR-only streaming (#12482): with the flag
     on, those clients are skipped and the download 403s. Video data is not
     behind the EJS challenge, so impersonation alone is sufficient.
+
+    Force ``player_client=web_embedded,web_safari`` explicitly (2026-08-14).
+    Without it, yt-dlp's own client-selection logic currently falls back to
+    ``android_vr`` for video-only formats, and YouTube started returning
+    HTTP 403 for that specific client's stream URLs (confirmed by hand:
+    identical request succeeds on ``web_embedded``/``web_safari``, fails on
+    the default-selected client). This is not an EJS/impersonation problem —
+    both clients here are unaffected by the EJS-vs-SABR conflict above, and
+    still work with impersonation only. yt-dlp's default fallback chain is
+    outside our control and can drift again; if 403s return, re-check which
+    client is actually being selected (yt-dlp -v) before assuming this list
+    is still valid.
     """
     args = [yt_dlp]
     if has_impersonation():
         args.append("--impersonate")
         args.append("chrome")
+    args.append("--extractor-args")
+    args.append("youtube:player_client=web_embedded,web_safari")
     return args
 
 

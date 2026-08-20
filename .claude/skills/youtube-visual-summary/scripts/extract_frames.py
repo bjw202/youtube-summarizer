@@ -76,7 +76,7 @@ def main() -> int:
                 "-frames:v",
                 "1",
                 "-vf",
-                f"scale={args.width}:-1",
+                f"scale={args.width}:-1,format=yuvj420p",
                 "-q:v",
                 "2",
                 "-y",

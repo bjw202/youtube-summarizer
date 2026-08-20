@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import html as html_mod
+import re
 import shutil
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -21,6 +22,14 @@ def escape(text: str) -> str:
     return html_mod.escape(str(text))
 
 
+def render_inline(text: str) -> str:
+    """HTML-escape, then apply inline markdown: `code` then **bold**."""
+    s = html_mod.escape(str(text))
+    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    s = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
+    return s
+
+
 def build_tags(chapters: list[dict]) -> str:
     parts = []
     for ch in chapters:
@@ -37,10 +46,18 @@ def build_toc(chapters: list[dict]) -> str:
         start = format_ts(ch.get("start", 0))
         end = format_ts(ch.get("end", 0))
         parts.append(
-            f'<li><a href="#{cid}">{title} '
-            f'<span class="chapter-time">{start} ~ {end}</span></a></li>'
+            f'<li><a href="#{cid}"><span>{title}'
+            f'<span class="toc-time">{start} ~ {end}</span></span></a></li>'
         )
     return "\n      ".join(parts)
+
+
+def watch_url(url: str, seconds: float) -> str:
+    """YouTube URL that starts playback at the given offset."""
+    if not url:
+        return ""
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}t={int(seconds)}s"
 
 
 def build_chapters(
@@ -48,16 +65,38 @@ def build_chapters(
     selections: dict[str, dict],
     internal_dir: Path,
     images_dir: Path,
+    url: str = "",
 ) -> str:
     parts: list[str] = []
-    for ch in chapters:
+    for index, ch in enumerate(chapters, start=1):
         cid = ch.get("id", "")
         title = escape(ch.get("title", ""))
         start = format_ts(ch.get("start", 0))
         end = format_ts(ch.get("end", 0))
 
+        time_label = f"{start} ~ {end}"
+        if url:
+            href = escape(watch_url(url, ch.get("start", 0)))
+            time_tag = (
+                f'<a class="chapter-time" href="{href}" target="_blank" rel="noopener" '
+                f'title="이 지점부터 영상 보기">{time_label}</a>'
+            )
+        else:
+            time_tag = f'<span class="chapter-time">{time_label}</span>'
+
         section = f'<section class="chapter" id="{cid}">\n'
-        section += f'  <h2 class="chapter-heading">{title} <span class="chapter-time">{start} ~ {end}</span></h2>\n'
+        section += (
+            f'  <h2 class="chapter-heading">'
+            f'<span class="chapter-num">{index:02d}</span>'
+            f'<span>{title}<br>{time_tag}</span></h2>\n'
+        )
+
+        key_point = ch.get("key_point")
+        if key_point:
+            section += '\n  <div class="keypoint">\n'
+            section += '    <span class="keypoint-label">핵심 정리</span>\n'
+            section += f"    <p>{render_inline(key_point)}</p>\n"
+            section += "  </div>\n"
 
         sel = selections.get(cid)
         if sel:
@@ -77,12 +116,28 @@ def build_chapters(
                 section += f'    <div class="chapter-image-caption">Frame: {ts_str}. {reason}</div>\n'
                 section += f'  </div>\n'
 
+        paragraphs = ch.get("summary_paragraphs", [])
+        if paragraphs:
+            section += '\n  <div class="summary-text">\n'
+            for para in paragraphs:
+                section += f"    <p>{render_inline(para)}</p>\n"
+            section += "  </div>\n"
+
         bullets = ch.get("summary_bullets", [])
         if bullets:
             section += '\n  <ul class="summary-list">\n'
             for bullet in bullets:
-                section += f"    <li>{escape(bullet)}</li>\n"
+                section += f"    <li>{render_inline(bullet)}</li>\n"
             section += "  </ul>\n"
+
+        commentary = ch.get("commentary")
+        if commentary:
+            paras = commentary if isinstance(commentary, list) else [commentary]
+            section += '\n  <div class="commentary">\n'
+            section += '    <span class="commentary-label">해설</span>\n'
+            for para in paras:
+                section += f"    <p>{render_inline(para)}</p>\n"
+            section += "  </div>\n"
 
         section += "</section>"
         parts.append(section)
@@ -125,7 +180,7 @@ def main() -> int:
     result = result.replace("{{SUMMARY_LEVEL}}", summary_level)
     result = result.replace("{{TAGS}}", build_tags(chapters))
     result = result.replace("{{TOC}}", build_toc(chapters))
-    result = result.replace("{{CHAPTERS}}", build_chapters(chapters, selections, internal_dir, images_dir))
+    result = result.replace("{{CHAPTERS}}", build_chapters(chapters, selections, internal_dir, images_dir, url))
     result = result.replace("{{TIMESTAMP}}", timestamp)
 
     out = run_dir / "summary.html"

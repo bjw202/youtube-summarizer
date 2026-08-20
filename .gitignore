@@ -8,3 +8,4 @@ __pycache__/
 **/_work/frames/
 **/_work/contact-sheets/*-sheet-*.jpg
 **/_work/captions/
+.gstack/

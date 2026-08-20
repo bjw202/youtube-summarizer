@@ -39,6 +39,9 @@ def main() -> int:
         end = format_ts(chapter["end"])
         lines.append(f"## {chapter['title']} (time: {start} ~ {end})")
         lines.append("")
+        if chapter.get("key_point"):
+            lines.append(f"> **핵심 정리** — {chapter['key_point']}")
+            lines.append("")
         if selection:
             source = first_existing(internal_dir / selection["image_path"], run_dir / selection["image_path"])
             if not source.exists():
@@ -51,9 +54,22 @@ def main() -> int:
             if selection.get("reason"):
                 lines.append(f"*Frame: {format_ts(selection['timestamp'])}. {selection['reason']}*")
                 lines.append("")
+        paragraphs = chapter.get("summary_paragraphs", [])
+        if paragraphs:
+            for para in paragraphs:
+                lines.append(para)
+                lines.append("")
         for bullet in chapter.get("summary_bullets", []):
             lines.append(f"- {bullet}")
         lines.append("")
+        commentary = chapter.get("commentary")
+        if commentary:
+            paras = commentary if isinstance(commentary, list) else [commentary]
+            lines.append("### 해설")
+            lines.append("")
+            for para in paras:
+                lines.append(para)
+                lines.append("")
 
     out = run_dir / "summary.md"
     out.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
