@@ -4,8 +4,18 @@ __pycache__/
 .DS_Store
 
 # Large intermediate files
-**/_work/frame-source.mp4
+**/_work/frame-source*.mp4
+**/_work/*.mp4
 **/_work/frames/
 **/_work/contact-sheets/*-sheet-*.jpg
 **/_work/captions/
+**/_work/tab-frames/
+*.mp3
 .gstack/
+
+# Logs and backup intermediates
+**/_work/*.log
+**/_work/*.bak
+
+# Secrets — never commit
+.env*
