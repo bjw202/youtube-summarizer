@@ -67,7 +67,14 @@ stdout에서 run 디렉토리 경로를 읽는다.
 - JS 런타임 + curl_cffi가 감지되면 yt-dlp에 `--remote-components ejs:github`(EJS 챌린지 해결)와 `--impersonate chrome`(429 봇 탐지 우회)을 자동 추가
 
 ```bash
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/build_transcript.py RUN_DIR
+.venv/bin/python .claude/skills/youtube-visual-summary/scripts/build_transcript.py RUN_DIR [--lang en]
+```
+
+**정본 자막 선택:** 기본 우선순위는 `ko` > `en`이고, 같은 언어 안에서는 업로더가 올린 수동 트랙(`.en-XXXX.vtt`)이 자동 생성(`.en.vtt`)보다 앞선다. **외국어 강의·세미나는 `--lang en`으로 원어를 정본으로 고정한다** — 한국어 자동 번역 자막은 고유명사를 파괴한다. 수동 트랙은 기본 fetch에 포함되지 않으므로 `_work/metadata.json`의 `subtitles`에 `en-...` 같은 키가 있으면 따로 받는다(자동 자막은 "AIME"→"Amy", "ORM"→"OM"처럼 받아쓴다):
+
+```bash
+.venv/bin/yt-dlp --skip-download --write-subs --sub-langs "<키>" --sub-format vtt \
+  --impersonate chrome --remote-components ejs:github -o "RUN_DIR/_work/captions/%(id)s" "URL"
 ```
 
 **자막이 없어 실패하면 STT 폴백** (`env_check.py --json`의 `has_stt`가 `true`일 때, Apple Silicon mlx-whisper):
@@ -119,6 +126,10 @@ stdout에서 run 디렉토리 경로를 읽는다.
 .venv/bin/python .claude/skills/youtube-visual-summary/scripts/extract_frames.py RUN_DIR
 .venv/bin/python .claude/skills/youtube-visual-summary/scripts/make_contact_sheets.py RUN_DIR
 ```
+
+`fetch_frame_source.py`는 player client를 고정하지 않는다. yt-dlp 기본값 → `mweb` → `web_embedded,web_safari` 순으로 자동 재시도하고, 성공한 client를 `_work/frame-source.json`에 남긴다. 전부 실패하면 **먼저 `setup_venv.py`를 다시 돌려 yt-dlp를 올린다**(YouTube 변경에 몇 주 안에 뒤처진다) — 상세는 `references/troubleshooting.md`의 "Video Download 403".
+
+텍스트 전용 run은 `selected-frames.json` 없이도 렌더링된다. 나중에 영상이 받아지면 Phase 5부터 이어서 돌린다.
 
 ### Phase 6: 프레임 선택 (Claude 직접 수행)
 
@@ -304,6 +315,7 @@ E|-------------------|
 | 자막 일부 실패 (429) | 성공한 언어로 계속 진행, 실패 언어는 경고만 |
 | 프레임 추출 실패 | 텍스트 전용으로 진행 |
 | yt-dlp 실패 | 네트워크/권한 안내 |
+| 비디오만 403 / Video unavailable | `setup_venv.py` 재실행(yt-dlp 업그레이드) → 자동 client 폴백 → `troubleshooting.md` |
 | JS 런타임 없음 | deno/node 설치 안내, `--remote-components` 없이 재시도 |
 | 스크립트 실행 에러 | `references/troubleshooting.md` 참조 |
 | Tab 프레임 너무 적음 | `--fps 5`로 재추출 권장 |

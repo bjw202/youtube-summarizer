@@ -63,7 +63,9 @@ def main() -> int:
     if uv and not args.no_uv:
         # uv resolves a bare version like "3.12" to a real interpreter on its own.
         run([uv, "venv", str(venv_dir), "--python", args.python], cwd=project_root)
-        run([uv, "pip", "install", "--python", str(venv_python(venv_dir)), *PACKAGES], cwd=project_root)
+        # --upgrade: YouTube breaks old yt-dlp within weeks (2026-09-21: 2026.07.04 could
+        # no longer download video data, 2026.8.19 could). Re-running this script is the fix.
+        run([uv, "pip", "install", "--upgrade", "--python", str(venv_python(venv_dir)), *PACKAGES], cwd=project_root)
     else:
         # pip fallback: venv is built from the *running* interpreter, so guard its version.
         if sys.version_info < MIN_PYTHON:
@@ -77,7 +79,7 @@ def main() -> int:
             venv.EnvBuilder(with_pip=True).create(venv_dir)
         py = str(venv_python(venv_dir))
         run([py, "-m", "pip", "install", "--upgrade", "pip"], cwd=project_root)
-        run([py, "-m", "pip", "install", *PACKAGES], cwd=project_root)
+        run([py, "-m", "pip", "install", "--upgrade", *PACKAGES], cwd=project_root)
 
     print(venv_python(venv_dir))
     return 0

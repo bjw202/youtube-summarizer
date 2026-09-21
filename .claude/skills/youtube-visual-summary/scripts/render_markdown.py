@@ -17,7 +17,9 @@ def main() -> int:
     internal_dir = existing_work_dir(run_dir)
     metadata = read_json(internal_dir / "metadata.json")
     chapters = read_json(internal_dir / "chapters.codex.json")
-    selected = read_json(internal_dir / "selected-frames.json")
+    selected_path = internal_dir / "selected-frames.json"
+    # text-only runs never create this file
+    selected = read_json(selected_path) if selected_path.exists() else {"selections": []}
     selections = {item["chapter_id"]: item for item in selected.get("selections", [])}
     images_dir = run_dir / "images"
     images_dir.mkdir(exist_ok=True)

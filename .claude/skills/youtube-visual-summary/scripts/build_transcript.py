@@ -104,13 +104,19 @@ def collapse_rolling_segments(segments: list[dict], max_duration: float = 14.0) 
     return output
 
 
-def score_caption(path: Path) -> tuple[int, str]:
+def score_caption(path: Path, prefer_lang: str | None = None) -> tuple[int, str]:
     name = path.name.lower()
     score = 0
+    if prefer_lang and re.search(rf"\.{re.escape(prefer_lang.lower())}(-[^.]+)?\.vtt$", name):
+        score += 1000
     if ".ko" in name:
         score += 100
     if ".en" in name:
         score += 80
+    # uploader-provided tracks come as e.g. ".en-j3PyPqV-e1s.vtt"; they beat
+    # the auto-generated ".en.vtt", which mangles proper nouns.
+    if re.search(r"\.[a-z]{2}-[^.]+\.vtt$", name) and "-orig" not in name:
+        score += 15
     if "auto" not in name:
         score += 10
     return (-score, name)
@@ -119,14 +125,15 @@ def score_caption(path: Path) -> tuple[int, str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Normalize downloaded YouTube captions to transcript.json.")
     parser.add_argument("run_dir")
+    parser.add_argument("--lang", default=None, help="caption language to force as canonical, e.g. en (default: ko > en)")
     args = parser.parse_args()
 
     run_dir = Path(args.run_dir)
     internal_dir = existing_work_dir(run_dir)
     metadata = read_json(internal_dir / "metadata.json")
-    caption_files = sorted((internal_dir / "captions").glob("*.vtt"), key=score_caption)
+    caption_files = sorted((internal_dir / "captions").glob("*.vtt"), key=lambda p: score_caption(p, args.lang))
     if not caption_files:
-        caption_files = sorted(internal_dir.glob("*.vtt"), key=score_caption)
+        caption_files = sorted(internal_dir.glob("*.vtt"), key=lambda p: score_caption(p, args.lang))
     if not caption_files:
         raise HarnessError(
             "no VTT captions found. Default workflow stops here; ask before using optional local STT."

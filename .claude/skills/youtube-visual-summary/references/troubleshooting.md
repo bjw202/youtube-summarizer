@@ -105,6 +105,8 @@ Try:
 yt-dlp -F URL
 ```
 
+For frame-source 403 / "Video unavailable", see the next section.
+
 For caption failures, retry `fetch_youtube.py` with narrower subtitle languages, such as `--sub-langs "en"`.
 
 For frame-source failures, retry with a smaller video-only format:
@@ -114,6 +116,24 @@ For frame-source failures, retry with a smaller video-only format:
 ```
 
 Private, region-limited, members-only, age-restricted, or bot-protected videos may not be supported.
+
+## Video Download 403 / "Video unavailable" (frame source)
+
+증상: 자막·메타데이터는 받아지는데 `fetch_frame_source.py`만 실패한다. `yt-dlp -F URL`은 포맷 목록을 정상 출력한다(= 영상은 공개 상태, 문제는 접속 방식).
+
+- `HTTP Error 403: Forbidden` — yt-dlp가 고른 player client의 스트림 URL을 YouTube가 거절한다.
+- `Video unavailable` / `Requested format is not available` — 고정한 client(`web_embedded` 등)가 그 영상의 포맷을 주지 않는다.
+
+원인: **어떤 player client가 통하는지는 몇 주 단위로 바뀐다.** 2026-08-14에는 기본값(`android_vr`)이 403이고 `web_embedded,web_safari`가 통했지만, 2026-09-21에는 그 고정값이 "Video unavailable"을 냈고 yt-dlp 2026.8.19의 새 기본값(`visionos`)이 통했다(yt-dlp 2026.07.04의 기본값은 여전히 403).
+
+조치 순서:
+
+1. **yt-dlp를 올린다.** `python3 .claude/skills/youtube-visual-summary/scripts/setup_venv.py` (항상 `--upgrade`로 설치한다). 대부분 여기서 끝난다.
+2. 스크립트는 client를 고정하지 않고 `common.VIDEO_CLIENT_FALLBACKS` 순서(기본값 → `mweb` → `web_embedded,web_safari`)로 자동 재시도하며, 성공한 client를 `_work/frame-source.json`의 `player_client`에 남긴다. `mweb`은 PO 토큰 없이 360p 통합 포맷(18)만 주지만 프레임 추출에는 쓸 수 있다.
+3. 전부 실패하면 client별로 직접 확인한다: `.venv/bin/yt-dlp -f 160 --impersonate chrome --extractor-args "youtube:player_client=<client>" URL` (`tv`, `ios`, `web` 등). 통하는 client를 `VIDEO_CLIENT_FALLBACKS`에 추가한다.
+4. 비디오 다운로드에는 `--remote-components`를 넣지 않는다(SABR 우회 client가 건너뛰어진다).
+
+텍스트 전용으로 먼저 마무리한 run은 나중에 Phase 5부터 이어서 돌리면 된다(`chapters.codex.json`의 `visual_query`가 남아 있다).
 
 ## Slow Video Download
 

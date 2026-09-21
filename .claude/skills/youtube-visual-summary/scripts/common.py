@@ -124,33 +124,42 @@ def build_yt_dlp_base_args(yt_dlp: str) -> list[str]:
     return args
 
 
-def build_yt_dlp_video_args(yt_dlp: str) -> list[str]:
+# Player-client attempts for video data, tried in order by fetch_frame_source.
+# ``None`` = let yt-dlp pick (its default chain is maintained upstream and is
+# the first thing to fix itself after a YouTube change — keep yt-dlp current).
+# ``mweb`` = mobile-web client; without a PO token it only exposes the
+# combined 360p format 18, but that is enough for frame extraction.
+# ``web_embedded,web_safari`` = the 2026-08-14 workaround, kept as a last
+# resort; it fails with "Video unavailable" on some uploads (confirmed
+# 2026-09-21 on Stanford Online lectures).
+VIDEO_CLIENT_FALLBACKS: list[str | None] = [None, "mweb", "web_embedded,web_safari"]
+
+
+def build_yt_dlp_video_args(yt_dlp: str, player_client: str | None = None) -> list[str]:
     """Build yt-dlp args for downloading *video data* — impersonation only.
 
     Do NOT pass ``--remote-components`` here. The EJS plugin interferes with
-    the SABR-bypassing player clients (e.g. android_vr) that yt-dlp falls
-    back to once YouTube enables SABR-only streaming (#12482): with the flag
-    on, those clients are skipped and the download 403s. Video data is not
-    behind the EJS challenge, so impersonation alone is sufficient.
+    the SABR-bypassing player clients that yt-dlp falls back to once YouTube
+    enables SABR-only streaming (#12482): with the flag on, those clients are
+    skipped and the download 403s. Video data is not behind the EJS
+    challenge, so impersonation alone is sufficient.
 
-    Force ``player_client=web_embedded,web_safari`` explicitly (2026-08-14).
-    Without it, yt-dlp's own client-selection logic currently falls back to
-    ``android_vr`` for video-only formats, and YouTube started returning
-    HTTP 403 for that specific client's stream URLs (confirmed by hand:
-    identical request succeeds on ``web_embedded``/``web_safari``, fails on
-    the default-selected client). This is not an EJS/impersonation problem —
-    both clients here are unaffected by the EJS-vs-SABR conflict above, and
-    still work with impersonation only. yt-dlp's default fallback chain is
-    outside our control and can drift again; if 403s return, re-check which
-    client is actually being selected (yt-dlp -v) before assuming this list
-    is still valid.
+    Do NOT pin a single ``player_client`` (2026-09-21). Which client works
+    drifts every few weeks: on 2026-08-14 the default (``android_vr``) 403ed
+    and ``web_embedded,web_safari`` worked; by 2026-09-21 yt-dlp 2026.07.04's
+    default still 403ed, the pinned pair returned "Video unavailable", and
+    yt-dlp 2026.8.19's new default (``visionos``) worked. So the default call
+    pins nothing, and callers iterate ``VIDEO_CLIENT_FALLBACKS``. If every
+    attempt fails, upgrade yt-dlp first (``setup_venv.py`` does this), then
+    check ``yt-dlp -v`` to see which client is being selected.
     """
     args = [yt_dlp]
     if has_impersonation():
         args.append("--impersonate")
         args.append("chrome")
-    args.append("--extractor-args")
-    args.append("youtube:player_client=web_embedded,web_safari")
+    if player_client:
+        args.append("--extractor-args")
+        args.append(f"youtube:player_client={player_client}")
     return args
 
 

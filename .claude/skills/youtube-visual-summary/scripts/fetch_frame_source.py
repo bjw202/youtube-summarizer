@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from common import HarnessError, build_yt_dlp_video_args, existing_work_dir, read_json, require_executable, run, write_json
+from common import VIDEO_CLIENT_FALLBACKS, HarnessError, build_yt_dlp_video_args, existing_work_dir, read_json, require_executable, run, write_json
 
 
 DEFAULT_FORMAT = "bv*[height<=720][ext=mp4]/bv*[height<=720]/bv*[height<=480][ext=mp4]/bv*[height<=480]/worstvideo"
@@ -27,20 +27,37 @@ def main() -> int:
     for old_part in internal_dir.glob("frame-source.*.part"):
         old_part.unlink()
 
-    # Video data uses impersonation only (no --remote-components): the EJS
-    # plugin interferes with the SABR-bypassing player clients yt-dlp falls
-    # back to, and a 403 follows. See common.build_yt_dlp_video_args.
-    base = build_yt_dlp_video_args(yt_dlp)
-    cmd = [
-        *base,
-        "-f",
-        args.format,
-        "--no-playlist",
-        "-o",
-        str(internal_dir / "frame-source.%(ext)s"),
-        url,
-    ]
-    run(cmd)
+    # Video data uses impersonation only (no --remote-components), and the
+    # player client is not pinned: try yt-dlp's default first, then the
+    # fallbacks. See common.build_yt_dlp_video_args for why.
+    errors: list[str] = []
+    used_client = None
+    for client in VIDEO_CLIENT_FALLBACKS:
+        cmd = [
+            *build_yt_dlp_video_args(yt_dlp, client),
+            "-f",
+            args.format,
+            "--no-playlist",
+            "-o",
+            str(internal_dir / "frame-source.%(ext)s"),
+            url,
+        ]
+        try:
+            run(cmd)
+            used_client = client or "default"
+            break
+        except HarnessError as exc:
+            last_line = str(exc).strip().splitlines()[-1]
+            errors.append(f"[{client or 'default'}] {last_line}")
+            for leftover in internal_dir.glob("frame-source.*"):
+                if leftover.name != "frame-source.json":
+                    leftover.unlink()
+    else:
+        raise HarnessError(
+            "frame source download failed on every player client:\n  "
+            + "\n  ".join(errors)
+            + "\nUpgrade yt-dlp first (re-run setup_venv.py), then see references/troubleshooting.md."
+        )
 
     sources = sorted(
         p for p in internal_dir.glob("frame-source.*")
@@ -54,6 +71,7 @@ def main() -> int:
         {
             "source_path": sources[0].name,
             "format": args.format,
+            "player_client": used_client,
             "purpose": "video-only low-resolution source for frame extraction",
         },
     )
