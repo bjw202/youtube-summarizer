@@ -191,136 +191,6 @@ stdout에서 run 디렉토리 경로를 읽는다.
 
 산출물: `RUN_DIR/study.html`, `RUN_DIR/images/study/`, `RUN_DIR/clips/`
 
-## Tab 추출 모드 워크플로우
-
-Phase 1에서 `mode: tab`으로 결정된 경우 아래 워크플로우를 따른다. 요약 모드의 Phase 2-7은 건너뛴다.
-
-### Tab Phase 2: 환경 준비
-
-요약 모드와 동일. 누락된 도구가 있으면 설치 안내 후 중단.
-
-### Tab Phase 3: 데이터 수집
-
-요약 모드 Phase 3과 동일하게 메타데이터 + 비디오 파일을 다운로드한다.
-자막은 tab 추출에 불필요하므로 건너뛴다.
-
-```bash
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/fetch_youtube.py "URL" --run-root runs
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/fetch_frame_source.py RUN_DIR
-```
-
-### Tab Phase 4: Tab 프레임 추출
-
-밀집 프레임 추출 + 중복 제거 + 컨택트 시트 생성:
-
-```bash
-# 3fps로 프레임 추출 + 중복 제거
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/extract_tab_frames.py RUN_DIR
-
-# 컨택트 시트 생성 (시각적 분석용)
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/make_tab_contact_sheet.py RUN_DIR
-```
-
-**매개변수 조정 가이드:**
-- 프레임이 너무 적으면 (< 10개): `--fps 5`로 재추출
-- 프레임이 너무 많으면 (> 300개): `--threshold 4`로 중복 제거 강화
-- 영상 해상도가 낮으면: `--max-width 1920`로 고해상도 추출
-
-출력:
-- `RUN_DIR/_work/tab-frames/tab_XXXX.png` — 고유 프레임들
-- `RUN_DIR/_work/tab-frames/tab_manifest.json` — 프레임 메타데이터
-- `RUN_DIR/_work/tab-sheets/tab-sheet-NN.jpg` — 컨택트 시트
-
-### Tab Phase 5: Tab 분석 (Claude 직접 수행)
-
-이 단계는 Claude가 비전 능력으로 tab 악보를 시각적으로 분석하여 텍스트로 변환한다.
-
-**사전 준비:** `references/tab-extraction-guide.md`를 읽어 tab 분석 방법론을 숙지한다.
-
-**분석 절차:**
-
-1. **컨택트 시트 검사** — `tab-sheets/`의 이미지를 읽어 tab 악보가 보이는지 확인
-2. **개별 프레임 분석** — 필요하면 `tab-frames/tab_XXXX.png` 개별 파일도 읽어 상세 분석
-3. **Tab 전사** — 각 프레임에서 tab notation을 읽어 텍스트로 변환
-4. **중첩 제거** — 연속 프레임 간 겹치는 구간을 식별하고 새로운 내용만 남김
-5. **섹션 분할** — 곡 구조(Intro, Verse, Chorus 등)에 따라 섹션 헤더 추가
-6. **`RUN_DIR/_work/tab_analysis.json` 생성:**
-
-```json
-{
-  "mode": "tab",
-  "title": "곡 제목",
-  "sections": [
-    {
-      "name": "Intro",
-      "time_range": "0:00 - 0:15",
-      "tab_text": "e|---0---1---3---5---|\nB|--1---1---0---0----|...",
-      "repeat": 1,
-      "confidence": "high"
-    }
-  ],
-  "notes": "분석 중 발견한 특이사항",
-  "uncertain_parts": ["불확실한 구간 설명"]
-}
-```
-
-**품질 기준:**
-- 6개 현(E, A, D, G, B, e) 모두 누락 없이 표시
-- 프렛 숫자 정확도 교차 검증
-- 마디 구분자(`|`) 일관성 유지
-- 읽기 어려운 부분은 `?` 또는 `(~N)` 표기
-
-### Tab Phase 6: Tab 출력 렌더링
-
-분석 결과를 사용자 친화적인 형식으로 출력한다.
-
-**Markdown 출력** (`RUN_DIR/tab.md`):
-```markdown
-# 🎸 Tab: {곡 제목}
-
-**원본 영상:** {YouTube URL}
-**채널:** {채널명}
-**추출 날짜:** {날짜}
-**프레임 수:** {고유 프레임 수}개 @ {fps}fps
-
----
-
-## Intro (0:00 - 0:15)
-
-\```
-e|---0---1---3---5---|
-B|--1---1---0---0----|
-G|-2---2---0---0-----|
-D|-------------------|
-A|-------------------|
-E|-------------------|
-\```
-
-## Verse (0:16 - 0:45) (x2)
-
-\```
-e|-------0-----------|
-B|-----1---1---------|
-G|---2-------2-------|
-D|-------------------|
-A|-0-----------------|
-E|-------------------|
-\```
-
----
-
-> ⚠️ 이 tab은 영상의 시각적 tab 악보에서 자동 추출한 것입니다.
-> 정확도 확인을 위해 원본 영상과 대조하세요.
-> `?` 또는 `(~N)` 표시는 불확실한 부분입니다.
-```
-
-**HTML 출력** (`RUN_DIR/tab.html`) — HTML 템플릿을 사용해 반응형 웹페이지로 렌더링. tab 코드는 `<pre>` 블록으로 표시.
-
-최종 산출물:
-- `RUN_DIR/tab.md` — Markdown tab 악보
-- `RUN_DIR/tab.html` — HTML tab 악보
-- `RUN_DIR/images/` — 컨택트 시트 이미지 (참조용)
-
 ## 캡션 정책
 
 우선순위: 수동 한국어 > 수동 영어 > 자동 생성 > 다른 언어. 자막이 없으면 STT 폴백(`stt_transcribe.py`, Apple Silicon mlx-whisper)으로 전사하고, STT 불가 시 텍스트 전용 모드.
@@ -342,10 +212,6 @@ E|-------------------|
 | 스크립트 실행 에러 | `references/troubleshooting.md` 참조 |
 | 학습 보기 클립 무음 / `frame source has no audio` | `fetch_frame_source.py RUN_DIR --with-audio` 후 `cut_clips.py --force` |
 | 학습 보기에서 유튜브 임베드 오류 153 | iframe을 쓰지 않는다 — `cut_clips.py`로 로컬 클립 생성 (`troubleshooting.md`) |
-| Tab 프레임 너무 적음 | `--fps 5`로 재추출 권장 |
-| Tab 프레임 너무 많음 | `--threshold 4`로 재추출 권장 |
-| Tab 영상이 아니었음 | 사용자에게 요약 모드 전환 제안 |
-| Tab 읽기 불가능 (해상도/화질) | `--max-width 1920`로 재추출 후 재시도 |
 
 ## 테스트 시나리오
 
@@ -374,19 +240,3 @@ E|-------------------|
 2. 사용자에게 텍스트 전용 모드 전환 또는 STT 제안
 3. 텍스트 전용 선택 시 Phase 5-6 건너뛰고 Phase 7 진행
 4. 결과: 프레임 이미지 없는 summary.md + summary.html 생성
-
-### Tab 추출 흐름
-
-1. 사용자가 "이 기타 영상 tab 악보 추출해줘: [URL]" 입력
-2. Phase 1: `mode: tab` 감지
-3. Tab Phase 2-3: 환경 준비 → 비디오 다운로드
-4. Tab Phase 4: `extract_tab_frames.py`로 밀집 프레임 추출 + 중복 제거 → `make_tab_contact_sheet.py`로 컨택트 시트 생성
-5. Tab Phase 5: Claude가 컨택트 시트/프레임을 비전으로 분석 → `tab_analysis.json` 생성
-6. Tab Phase 6: `tab.md` + `tab.html` 렌더링
-7. 결과: `runs/YYYY-MM-DD_HHMMSS_slug/tab.md` 에 완전한 tab 악보 생성
-
-### Tab 에러 흐름 (Tab 영상이 아닌 경우)
-
-1. Tab Phase 5에서 프레임에 tab notation이 보이지 않음
-2. 사용자에게 요약 모드 전환 제안
-3. 요약 모드로 전환하여 기존 워크플로우 실행
