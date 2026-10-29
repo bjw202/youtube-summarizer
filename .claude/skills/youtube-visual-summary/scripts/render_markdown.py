@@ -2,10 +2,22 @@
 from __future__ import annotations
 
 import argparse
-import shutil
 from pathlib import Path
 
-from common import HarnessError, existing_work_dir, first_existing, format_ts, read_json
+from common import existing_work_dir, format_ts, group_selections, place_selections, read_json
+
+
+def figure_lines(chapter: dict, placed: list, run_dir: Path) -> list[str]:
+    lines: list[str] = []
+    for sel, target in placed:
+        alt = sel.get("caption") or chapter.get("visual_query") or chapter["title"]
+        lines.append(f"![{alt}]({target.relative_to(run_dir).as_posix()})")
+        lines.append("")
+        note = sel.get("caption") or sel.get("reason")
+        if note:
+            lines.append(f"*Frame: {format_ts(sel['timestamp'])}. {note}*")
+            lines.append("")
+    return lines
 
 
 def main() -> int:
@@ -20,7 +32,7 @@ def main() -> int:
     selected_path = internal_dir / "selected-frames.json"
     # text-only runs never create this file
     selected = read_json(selected_path) if selected_path.exists() else {"selections": []}
-    selections = {item["chapter_id"]: item for item in selected.get("selections", [])}
+    selections = group_selections(selected)
     images_dir = run_dir / "images"
     images_dir.mkdir(exist_ok=True)
 
@@ -36,7 +48,7 @@ def main() -> int:
 
     for chapter in chapters.get("chapters", []):
         chapter_id = chapter["id"]
-        selection = selections.get(chapter_id)
+        placed = place_selections(chapter_id, selections.get(chapter_id, []), internal_dir, run_dir, images_dir)
         start = format_ts(chapter["start"])
         end = format_ts(chapter["end"])
         lines.append(f"## {chapter['title']} (time: {start} ~ {end})")
@@ -44,26 +56,31 @@ def main() -> int:
         if chapter.get("key_point"):
             lines.append(f"> **핵심 정리** — {chapter['key_point']}")
             lines.append("")
-        if selection:
-            source = first_existing(internal_dir / selection["image_path"], run_dir / selection["image_path"])
-            if not source.exists():
-                raise HarnessError(f"selected image does not exist: {source}")
-            target = images_dir / f"{chapter_id}{source.suffix}"
-            shutil.copy2(source, target)
-            alt = chapter.get("visual_query") or chapter["title"]
-            lines.append(f"![{alt}]({target.relative_to(run_dir).as_posix()})")
-            lines.append("")
-            if selection.get("reason"):
-                lines.append(f"*Frame: {format_ts(selection['timestamp'])}. {selection['reason']}*")
-                lines.append("")
+        lines.extend(figure_lines(chapter, placed.pop(None, []), run_dir))
         paragraphs = chapter.get("summary_paragraphs", [])
         if paragraphs:
             for para in paragraphs:
                 lines.append(para)
                 lines.append("")
-        for bullet in chapter.get("summary_bullets", []):
+        bullets = chapter.get("summary_bullets", [])
+        for i, bullet in enumerate(bullets):
             lines.append(f"- {bullet}")
+            if i in placed:
+                lines.append("")
+                lines.extend(figure_lines(chapter, placed.pop(i), run_dir))
+        # after_bullet past the last bullet lands at the end
+        for rest in placed.values():
+            lines.append("")
+            lines.extend(figure_lines(chapter, rest, run_dir))
         lines.append("")
+        prompt = chapter.get("prompt")
+        if prompt:
+            lines.append(f"### {prompt.get('title') or '따라 하기 프롬프트'}")
+            lines.append("")
+            lines.append("```text")
+            lines.append(prompt["text"].rstrip())
+            lines.append("```")
+            lines.append("")
         commentary = chapter.get("commentary")
         if commentary:
             paras = commentary if isinstance(commentary, list) else [commentary]

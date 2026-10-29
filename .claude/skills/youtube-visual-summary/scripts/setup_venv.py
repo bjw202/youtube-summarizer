@@ -62,7 +62,9 @@ def main() -> int:
 
     if uv and not args.no_uv:
         # uv resolves a bare version like "3.12" to a real interpreter on its own.
-        run([uv, "venv", str(venv_dir), "--python", args.python], cwd=project_root)
+        # uv venv refuses an existing dir; skipping it lets reruns reach the --upgrade below
+        if not venv_python(venv_dir).exists():
+            run([uv, "venv", str(venv_dir), "--python", args.python], cwd=project_root)
         # --upgrade: YouTube breaks old yt-dlp within weeks (2026-09-21: 2026.07.04 could
         # no longer download video data, 2026.8.19 could). Re-running this script is the fix.
         run([uv, "pip", "install", "--upgrade", "--python", str(venv_python(venv_dir)), *PACKAGES], cwd=project_root)

@@ -1,6 +1,6 @@
 ---
 name: youtube-visual-summary
-description: "YouTube/유튜브 영상의 자막 기반 비주얼 요약을 Markdown과 HTML로 생성. YouTube URL이 주어지면 반드시 이 스킬을 사용할 것. 영상 요약, 비디오 요약, 비디오 서머리, 자막 요약, 챕터 분할, 프레임 추출, visual summary, 마크다운 요약, HTML 요약, summary.md, summary.html 생성 시에도 이 스킬 사용. 후속 작업 — 다시 요약, 요약 수정, 요약 보완, 더 자세히, 간단히, 텍스트 전용 요약, 프레임만 재선택 — 요청 시에도 반드시 이 스킬을 사용."
+description: "YouTube/유튜브 영상의 자막 기반 비주얼 요약을 Markdown과 HTML로 생성. YouTube URL이 주어지면 반드시 이 스킬을 사용할 것. 영상 요약, 비디오 요약, 비디오 서머리, 자막 요약, 챕터 분할, 프레임 추출, visual summary, 마크다운 요약, HTML 요약, summary.md, summary.html 생성 시에도 이 스킬 사용. 영상 구간을 설명과 나란히 놓고 섹션별로 공부하는 학습 페이지(학습 보기, study.html) — '섹션별로 영상이랑 같이 보고 싶어', '학습 노트', '용어집 페이지', '왼쪽 영상 오른쪽 설명', '구간 재생', '여러 영상을 하나로 묶어서 공부' — 요청 시에도 이 스킬을 사용. 후속 작업 — 다시 요약, 요약 수정, 요약 보완, 더 자세히, 간단히, 텍스트 전용 요약, 프레임만 재선택, 학습 보기 추가 — 요청 시에도 반드시 이 스킬을 사용."
 ---
 
 # YouTube Visual Summary
@@ -29,6 +29,7 @@ YouTube 공개 영상의 자막 기반 비주얼 요약을 Markdown과 HTML 두 
 - `summary_level`: `short`, `normal`, `detailed` (기본값: `normal`)
 - `output_format`: `both`, `markdown`, `html` (기본값: `both`)
 - `text_only`: `true`면 프레임 추출 생략 (기본값: `false`)
+- `study_view`: `true`면 Phase 7 뒤에 학습 보기 단계 실행 (기본값: `false`). "섹션별로 영상과 같이 공부", "학습 노트/용어집 페이지", "구간 재생" 요청이면 `true`. 처음부터 `true`면 Phase 5의 프레임 소스를 `--with-audio`로 받는다
 
 ### Phase 2: 환경 준비
 
@@ -129,6 +130,8 @@ stdout에서 run 디렉토리 경로를 읽는다.
 
 `fetch_frame_source.py`는 player client를 고정하지 않는다. yt-dlp 기본값 → `mweb` → `web_embedded,web_safari` 순으로 자동 재시도하고, 성공한 client를 `_work/frame-source.json`에 남긴다. 전부 실패하면 **먼저 `setup_venv.py`를 다시 돌려 yt-dlp를 올린다**(YouTube 변경에 몇 주 안에 뒤처진다) — 상세는 `references/troubleshooting.md`의 "Video Download 403".
 
+챕터가 10~40초로 짧으면(용어·단계 하나씩 나눈 영상) `extract_frames.py --interval 2.5`로 고정 간격 조밀 추출을 한다 — 기본 간격(챕터 길이/15)으로는 3장뿐이다. 학습 보기(Phase 8)를 만들 run은 `fetch_frame_source.py --with-audio`로 받는다(소리 포함 1080p 한 파일로 프레임과 클립을 같이 처리).
+
 텍스트 전용 run은 `selected-frames.json` 없이도 렌더링된다. 나중에 영상이 받아지면 Phase 5부터 이어서 돌린다.
 
 ### Phase 6: 프레임 선택 (Claude 직접 수행)
@@ -151,6 +154,8 @@ stdout에서 run 디렉토리 경로를 읽는다.
 }
 ```
 
+**한 챕터에 여러 장면 (화면 시연이 많은 영상):** 같은 `chapter_id`로 selection을 여러 개 넣는다. `after_bullet`(0부터 세는 bullet 번호)을 주면 그 bullet 바로 뒤에, 없으면 챕터 맨 위에 놓인다. `caption`을 주면 `reason` 대신 이미지 설명으로 쓰인다. 챕터에 `prompt: {"title", "text"}`를 넣으면 복사 버튼이 달린 프롬프트 카드로 렌더된다. 이때는 챕터 단위 후보 추출 대신 3초 간격 개관 시트로 전체를 훑고, 글자가 다 드러난 시점을 골라 1080p 소스에서 직접 뽑는 편이 정확하다(`fetch_frame_source.py --format "bv*[height<=1080][ext=mp4]"`; Homebrew ffmpeg에 libwebp가 없으면 PNG로 뽑아 PIL로 WebP 변환).
+
 프레임 선택 기준:
 - 시맨틱 매치 → 정보 가치(차트>얼굴) → 가독성 → 선명도 → 특이성
 - 후보가 모두 부족하면 `--max-frames-per-chapter 16`으로 재추출
@@ -168,6 +173,23 @@ stdout에서 run 디렉토리 경로를 읽는다.
 - `RUN_DIR/summary.md`
 - `RUN_DIR/summary.html`
 - `RUN_DIR/images/` (선택된 프레임)
+
+### Phase 8 (선택): 학습 보기
+
+`study_view`일 때만. 각 섹션의 영상 구간(로컬 클립)과 설명을 나란히 놓는 `study.html`을 만든다. **먼저 `references/study-view.md`를 읽는다** — 스키마, 항목·장면 고르기, 영상 여러 개 통합 방식, 지켜야 할 규칙이 거기 있다.
+
+```bash
+.venv/bin/python .claude/skills/youtube-visual-summary/scripts/fetch_frame_source.py RUN_DIR --with-audio  # 무음 소스면 다시 받기
+# (선택) RUN_DIR/_work/study.json 작성 — 없으면 챕터 1개 = 항목 1개로 자동 구성
+.venv/bin/python .claude/skills/youtube-visual-summary/scripts/cut_clips.py RUN_DIR
+.venv/bin/python .claude/skills/youtube-visual-summary/scripts/render_study.py RUN_DIR
+.venv/bin/python .claude/skills/youtube-visual-summary/scripts/check_study.py RUN_DIR
+```
+
+- 로컬 페이지에 유튜브 iframe을 넣지 않는다 — `file://`에서는 오류 153으로 재생되지 않는다. 구간 재생은 로컬 클립만 쓴다.
+- `check_study.py`에 FAIL이 하나라도 있으면 전달하지 않는다(무음 클립, 빠진 이미지, 깨진 앵커).
+
+산출물: `RUN_DIR/study.html`, `RUN_DIR/images/study/`, `RUN_DIR/clips/`
 
 ## Tab 추출 모드 워크플로우
 
@@ -318,6 +340,8 @@ E|-------------------|
 | 비디오만 403 / Video unavailable | `setup_venv.py` 재실행(yt-dlp 업그레이드) → 자동 client 폴백 → `troubleshooting.md` |
 | JS 런타임 없음 | deno/node 설치 안내, `--remote-components` 없이 재시도 |
 | 스크립트 실행 에러 | `references/troubleshooting.md` 참조 |
+| 학습 보기 클립 무음 / `frame source has no audio` | `fetch_frame_source.py RUN_DIR --with-audio` 후 `cut_clips.py --force` |
+| 학습 보기에서 유튜브 임베드 오류 153 | iframe을 쓰지 않는다 — `cut_clips.py`로 로컬 클립 생성 (`troubleshooting.md`) |
 | Tab 프레임 너무 적음 | `--fps 5`로 재추출 권장 |
 | Tab 프레임 너무 많음 | `--threshold 4`로 재추출 권장 |
 | Tab 영상이 아니었음 | 사용자에게 요약 모드 전환 제안 |
@@ -334,6 +358,15 @@ E|-------------------|
 5. Phase 6: Claude가 contact sheet 검사 → selected-frames.json 생성
 6. Phase 7: summary.md + summary.html 렌더링
 7. 결과: `runs/YYYY-MM-DD_HHMMSS_slug/` 에 전체 산출물 생성
+
+### 학습 보기 흐름
+
+1. 사용자가 "이 영상 섹션별로 영상이랑 같이 공부할 수 있게 만들어줘: [URL]" 입력 → `study_view: true`
+2. Phase 1-4는 정상 흐름과 같다. 짧은 단위(용어·단계)로 챕터를 나눈다
+3. Phase 5: `fetch_frame_source.py --with-audio` → `extract_frames.py --interval 2.5`(챕터가 짧을 때) → contact sheet
+4. Phase 6-7: 프레임 선택, summary.md/html
+5. Phase 8: (필요하면 `study.json` 작성) → `cut_clips.py` → `render_study.py` → `check_study.py` OK
+6. 결과: `study.html` + `clips/` + `images/study/`
 
 ### 에러 흐름 (자막 없음)
 

@@ -4,11 +4,10 @@ from __future__ import annotations
 import argparse
 import html as html_mod
 import re
-import shutil
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from common import HarnessError, existing_work_dir, first_existing, format_ts, read_json
+from common import HarnessError, existing_work_dir, format_ts, group_selections, place_selections, read_json
 
 
 KST = timezone(timedelta(hours=9))
@@ -60,9 +59,27 @@ def watch_url(url: str, seconds: float) -> str:
     return f"{url}{sep}t={int(seconds)}s"
 
 
+def build_figures(ch: dict, placed: list, run_dir: Path, url: str) -> str:
+    out = ""
+    for sel, target in placed:
+        alt = escape(sel.get("caption") or ch.get("visual_query") or ch.get("title", ""))
+        img_rel = target.relative_to(run_dir).as_posix()
+        ts = sel.get("timestamp", 0)
+        ts_str = format_ts(ts)
+        if url:
+            ts_str = (f'<a href="{escape(watch_url(url, ts))}" target="_blank" rel="noopener">'
+                      f'{ts_str}</a>')
+        note = render_inline(sel.get("caption") or sel.get("reason", ""))
+        out += '\n  <div class="chapter-image">\n'
+        out += f'    <img src="{img_rel}" alt="{alt}" loading="lazy">\n'
+        out += f'    <div class="chapter-image-caption">Frame: {ts_str}. {note}</div>\n'
+        out += '  </div>\n'
+    return out
+
+
 def build_chapters(
     chapters: list[dict],
-    selections: dict[str, dict],
+    selections: dict[str, list[dict]],
     internal_dir: Path,
     images_dir: Path,
     url: str = "",
@@ -98,23 +115,8 @@ def build_chapters(
             section += f"    <p>{render_inline(key_point)}</p>\n"
             section += "  </div>\n"
 
-        sel = selections.get(cid)
-        if sel:
-            source = first_existing(
-                internal_dir / sel["image_path"],
-                images_dir.parent / sel["image_path"],
-            )
-            if source.exists():
-                target = images_dir / f"{cid}{source.suffix}"
-                shutil.copy2(source, target)
-                alt = escape(ch.get("visual_query") or ch.get("title", ""))
-                img_rel = target.relative_to(images_dir.parent).as_posix()
-                ts_str = format_ts(sel.get("timestamp", 0))
-                reason = escape(sel.get("reason", ""))
-                section += f'\n  <div class="chapter-image">\n'
-                section += f'    <img src="{img_rel}" alt="{alt}" loading="lazy">\n'
-                section += f'    <div class="chapter-image-caption">Frame: {ts_str}. {reason}</div>\n'
-                section += f'  </div>\n'
+        placed = place_selections(cid, selections.get(cid, []), internal_dir, images_dir.parent, images_dir)
+        section += build_figures(ch, placed.pop(None, []), images_dir.parent, url)
 
         paragraphs = ch.get("summary_paragraphs", [])
         if paragraphs:
@@ -126,9 +128,25 @@ def build_chapters(
         bullets = ch.get("summary_bullets", [])
         if bullets:
             section += '\n  <ul class="summary-list">\n'
-            for bullet in bullets:
+            for i, bullet in enumerate(bullets):
                 section += f"    <li>{render_inline(bullet)}</li>\n"
+                if i in placed and i < len(bullets) - 1:
+                    # close the list so the figure spans the column, then resume
+                    section += "  </ul>\n"
+                    section += build_figures(ch, placed.pop(i), images_dir.parent, url)
+                    section += '  <ul class="summary-list">\n'
             section += "  </ul>\n"
+        for rest in placed.values():
+            section += build_figures(ch, rest, images_dir.parent, url)
+
+        prompt = ch.get("prompt")
+        if prompt:
+            label = escape(prompt.get("title") or "따라 하기 프롬프트")
+            section += '\n  <div class="prompt-card">\n'
+            section += (f'    <div class="prompt-head"><span class="prompt-label">{label}</span>'
+                        f'<button class="prompt-copy" type="button">복사</button></div>\n')
+            section += f'    <pre>{escape(prompt["text"].rstrip())}</pre>\n'
+            section += "  </div>\n"
 
         commentary = ch.get("commentary")
         if commentary:
@@ -157,7 +175,7 @@ def main() -> int:
     selected_path = internal_dir / "selected-frames.json"
     # text-only runs never create this file
     selected = read_json(selected_path) if selected_path.exists() else {"selections": []}
-    selections = {item["chapter_id"]: item for item in selected.get("selections", [])}
+    selections = group_selections(selected)
     images_dir = run_dir / "images"
     images_dir.mkdir(exist_ok=True)
 

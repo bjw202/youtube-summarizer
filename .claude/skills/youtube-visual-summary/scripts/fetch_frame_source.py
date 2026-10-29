@@ -4,17 +4,27 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from common import VIDEO_CLIENT_FALLBACKS, HarnessError, build_yt_dlp_video_args, existing_work_dir, read_json, require_executable, run, write_json
+from common import (
+    VIDEO_CLIENT_FALLBACKS, VIDEO_SUFFIXES, HarnessError, build_yt_dlp_video_args, existing_work_dir,
+    has_audio_stream, read_json, require_executable, run, write_json,
+)
 
 
 DEFAULT_FORMAT = "bv*[height<=720][ext=mp4]/bv*[height<=720]/bv*[height<=480][ext=mp4]/bv*[height<=480]/worstvideo"
+# Study view: one 1080p file with sound serves both frame extraction and clip
+# cutting. A separate silent frame source + audio source pair invited cutting
+# clips from the silent one (happened on the first glossary run).
+WITH_AUDIO_FORMAT = "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/b"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Download a low-resolution video-only frame source.")
     parser.add_argument("run_dir")
-    parser.add_argument("--format", default=DEFAULT_FORMAT)
+    parser.add_argument("--format", default=None)
+    parser.add_argument("--with-audio", action="store_true",
+                        help="1080p video+audio in one mp4 (needed for study-view clips)")
     args = parser.parse_args()
+    fmt = args.format or (WITH_AUDIO_FORMAT if args.with_audio else DEFAULT_FORMAT)
 
     yt_dlp = require_executable("yt-dlp")
     run_dir = Path(args.run_dir)
@@ -26,6 +36,12 @@ def main() -> int:
 
     for old_part in internal_dir.glob("frame-source.*.part"):
         old_part.unlink()
+    if args.with_audio:
+        # yt-dlp skips a file that already exists, so a silent source from an
+        # earlier plain run would survive. Drop it so the audio version lands.
+        for old in internal_dir.glob("frame-source.*"):
+            if old.suffix.lower() in VIDEO_SUFFIXES and not has_audio_stream(old):
+                old.unlink()
 
     # Video data uses impersonation only (no --remote-components), and the
     # player client is not pinned: try yt-dlp's default first, then the
@@ -36,7 +52,8 @@ def main() -> int:
         cmd = [
             *build_yt_dlp_video_args(yt_dlp, client),
             "-f",
-            args.format,
+            fmt,
+            *(["--merge-output-format", "mp4"] if args.with_audio else []),
             "--no-playlist",
             "-o",
             str(internal_dir / "frame-source.%(ext)s"),
@@ -61,18 +78,23 @@ def main() -> int:
 
     sources = sorted(
         p for p in internal_dir.glob("frame-source.*")
-        if p.is_file() and not p.name.endswith(".part") and p.suffix.lower() in {".mp4", ".webm", ".mkv"}
+        if p.is_file() and not p.name.endswith(".part") and p.suffix.lower() in VIDEO_SUFFIXES
     )
     if not sources:
         raise HarnessError("frame source video was not downloaded")
 
+    has_audio = has_audio_stream(sources[0])
+    if args.with_audio and not has_audio:
+        raise HarnessError(f"--with-audio download has no audio stream: {sources[0]}")
     write_json(
         internal_dir / "frame-source.json",
         {
             "source_path": sources[0].name,
-            "format": args.format,
+            "format": fmt,
             "player_client": used_client,
-            "purpose": "video-only low-resolution source for frame extraction",
+            "has_audio": has_audio,
+            "purpose": "frame extraction + study-view clips" if has_audio
+            else "video-only low-resolution source for frame extraction",
         },
     )
     print(sources[0].resolve())

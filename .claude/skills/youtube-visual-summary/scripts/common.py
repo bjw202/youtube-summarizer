@@ -213,3 +213,58 @@ def first_existing(*paths: Path) -> Path:
         if path.exists():
             return path
     return paths[0]
+
+
+VIDEO_SUFFIXES = {".mp4", ".webm", ".mkv"}
+
+
+def find_frame_source(run_dir: Path) -> Path:
+    internal_dir = existing_work_dir(run_dir)
+    candidates = [
+        p for p in sorted(internal_dir.glob("frame-source.*"))
+        if p.is_file() and not p.name.endswith(".part") and p.suffix.lower() in VIDEO_SUFFIXES
+    ]
+    candidates.extend(
+        p for p in sorted(internal_dir.glob("video-preview.*"))
+        if p.is_file() and not p.name.endswith(".part") and p.suffix.lower() in VIDEO_SUFFIXES
+    )
+    if not candidates:
+        raise HarnessError("missing frame source video; run fetch_frame_source.py RUN_DIR first")
+    return candidates[0]
+
+
+def has_audio_stream(path: Path) -> bool:
+    """True if ffprobe sees at least one audio stream in ``path``.
+
+    The default frame source is video-only (``bv*``), so anything cut from it
+    plays silently. Study-view clips must be checked with this, not assumed.
+    """
+    proc = run([require_executable("ffprobe"), "-v", "error", "-select_streams", "a",
+                "-show_entries", "stream=index", "-of", "csv=p=0", str(path)])
+    return bool(proc.stdout.strip())
+
+
+def group_selections(selected: dict) -> dict[str, list[dict]]:
+    """Selections per chapter, in file order. A chapter may carry several frames;
+    each one is placed at the top, or after bullet ``after_bullet`` (0-based)."""
+    grouped: dict[str, list[dict]] = {}
+    for item in selected.get("selections", []):
+        grouped.setdefault(item["chapter_id"], []).append(item)
+    return grouped
+
+
+def place_selections(
+    chapter_id: str, items: list[dict], internal_dir: Path, run_dir: Path, images_dir: Path
+) -> dict[int | None, list[tuple[dict, Path]]]:
+    """Copy each selected frame into images/ and bucket it by insertion point
+    (None = top of chapter). The first frame keeps the legacy ``{chapter_id}`` name."""
+    placed: dict[int | None, list[tuple[dict, Path]]] = {}
+    for n, sel in enumerate(items):
+        source = first_existing(internal_dir / sel["image_path"], run_dir / sel["image_path"])
+        if not source.exists():
+            raise HarnessError(f"selected image does not exist: {source}")
+        name = chapter_id if n == 0 else f"{chapter_id}-{n + 1:02d}"
+        target = images_dir / f"{name}{source.suffix}"
+        shutil.copy2(source, target)
+        placed.setdefault(sel.get("after_bullet"), []).append((sel, target))
+    return placed

@@ -135,6 +135,22 @@ Private, region-limited, members-only, age-restricted, or bot-protected videos m
 
 텍스트 전용으로 먼저 마무리한 run은 나중에 Phase 5부터 이어서 돌리면 된다(`chapters.codex.json`의 `visual_query`가 남아 있다).
 
+## 학습 보기: 유튜브 플레이어 오류 153 (로컬 HTML)
+
+증상: `file://`로 연 HTML의 유튜브 iframe이 "동영상 플레이어 구성 오류" / "오류 153"을 낸다. `www.youtube.com`, `youtube-nocookie.com` 둘 다 같다.
+
+원인: 2025-11부터 유튜브가 임베드 요청의 referrer를 검사한다. 로컬 파일에는 보낼 출처가 없어서 `<meta name="referrer">`나 `referrerpolicy`로도 고칠 수 없다(UMich TeamDynamix KB "Fixing YouTube Player Error 153", WordPress/gutenberg#73288 등 같은 보고).
+
+조치: 임베드를 쓰지 않는다. `cut_clips.py`로 구간 클립을 만들고 `<video>`로 재생한다(`render_study.py`가 이렇게 렌더한다). 원본으로 가는 길은 `t=` 딥링크로 남긴다. 웹 서버(http/https)에 올린 페이지는 임베드가 될 수 있지만, 이 하네스의 산출물은 로컬 파일이 기본이다.
+
+## 학습 보기: 클립에 소리가 없음
+
+증상: `cut_clips.py`가 `frame source has no audio`로 멈추거나, `check_study.py`가 `clip has no audio`를 낸다.
+
+원인: 기본 `fetch_frame_source.py`는 영상 스트림만(`bv*`) 받는다. 첫 용어집 run에서는 무음 소스와 소리 있는 소스를 따로 받다가 무음 쪽에서 클립을 잘라 다시 작업했다.
+
+조치: `fetch_frame_source.py RUN_DIR --with-audio`로 다시 받는다(무음 파일을 지우고 소리 포함 1080p를 받는다). 같은 영상이라 프레임은 다시 뽑지 않아도 된다. 그다음 `cut_clips.py RUN_DIR --force`로 클립을 새로 자른다.
+
 ## Slow Video Download
 
 Do not use `bestvideo+bestaudio` for frame extraction. Images do not need audio, and merging separate audio/video streams is slow. Use:

@@ -5,14 +5,18 @@ import argparse
 import math
 from pathlib import Path
 
-from common import HarnessError, existing_work_dir, read_json, relpath, require_executable, run, write_json
+from common import HarnessError, existing_work_dir, find_frame_source, read_json, relpath, require_executable, run, write_json
 
 
-def sample_times(start: float, end: float, max_frames: int) -> list[float]:
+def sample_times(start: float, end: float, max_frames: int, interval: float | None = None) -> list[float]:
+    """Candidate timestamps for one chapter. By default the spacing grows with
+    chapter length (duration/15). ``interval`` fixes the spacing instead — short
+    chapters (10~40s, one term or one demo each) otherwise get only 3 frames."""
     if end <= start:
         return [start]
     duration = end - start
-    count = min(max_frames, max(3, math.ceil(duration / 15) + 1))
+    per_chapter = duration / interval if interval else duration / 15
+    count = min(max_frames, max(3, math.ceil(per_chapter) + 1))
     if count == 1:
         return [start + duration / 2]
     margin = min(2.0, duration * 0.08)
@@ -24,27 +28,16 @@ def sample_times(start: float, end: float, max_frames: int) -> list[float]:
     return [round(usable_start + step * i, 2) for i in range(count)]
 
 
-def find_frame_source(run_dir: Path) -> Path:
-    internal_dir = existing_work_dir(run_dir)
-    candidates = [
-        p for p in sorted(internal_dir.glob("frame-source.*"))
-        if p.is_file() and not p.name.endswith(".part") and p.suffix.lower() in {".mp4", ".webm", ".mkv"}
-    ]
-    candidates.extend(
-        p for p in sorted(internal_dir.glob("video-preview.*"))
-        if p.is_file() and not p.name.endswith(".part") and p.suffix.lower() in {".mp4", ".webm", ".mkv"}
-    )
-    if not candidates:
-        raise HarnessError("missing frame source video; run fetch_frame_source.py RUN_DIR first")
-    return candidates[0]
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Extract candidate frames for each Codex chapter.")
     parser.add_argument("run_dir")
-    parser.add_argument("--max-frames-per-chapter", type=int, default=8)
+    parser.add_argument("--max-frames-per-chapter", type=int, default=None,
+                        help="cap per chapter (default 8; 16 with --interval)")
+    parser.add_argument("--interval", type=float, default=None,
+                        help="fixed spacing in seconds, e.g. 2.5 for short per-term chapters")
     parser.add_argument("--width", type=int, default=1280)
     args = parser.parse_args()
+    max_frames = args.max_frames_per_chapter or (16 if args.interval else 8)
 
     require_executable("ffmpeg")
     run_dir = Path(args.run_dir)
@@ -61,7 +54,7 @@ def main() -> int:
         chapter_id = chapter["id"]
         chapter_dir = frames_root / chapter_id
         chapter_dir.mkdir(parents=True, exist_ok=True)
-        for idx, ts in enumerate(sample_times(float(chapter["start"]), float(chapter["end"]), args.max_frames_per_chapter), 1):
+        for idx, ts in enumerate(sample_times(float(chapter["start"]), float(chapter["end"]), max_frames, args.interval), 1):
             frame_id = f"{chapter_id}-f{idx:03d}"
             out = chapter_dir / f"{frame_id}.jpg"
             cmd = [
