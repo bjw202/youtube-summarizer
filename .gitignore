@@ -30,3 +30,7 @@ CLAUDE.local.md
 
 # 개인 STT 용어 프롬프트 (stt_transcribe.py가 있으면 읽는다)
 .claude/skills/youtube-visual-summary/stt-prompt.local.txt
+
+# 개발 기록 — 하네스를 만들 때 쓴 지시문과 자세한 변경 기록 (공개용은 CHANGELOG.md)
+HARNESS_PROMPT.md
+CHANGELOG.local.md

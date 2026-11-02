@@ -193,8 +193,11 @@ youtube-summarizer/
 │           ├── timing.log             # 단계별 시작·끝 시각 (timing.py)
 │           ├── clean_run.log          # 원본 영상 정리 기록 (clean_run.py)
 │           └── frame-source.mp4       # 다운로드한 원본 영상 (Phase 9에서 지움)
+├── tests/                             # 자동 시험 (가짜 run으로 설치·그리기 확인)
+├── .github/workflows/                 # 맥·윈도우·리눅스 자동 시험
 ├── CLAUDE.md                          # Claude Code 프로젝트 지침
-├── HARNESS_PROMPT.md                  # 하네스 프롬프트
+├── CHANGELOG.md                       # 변경 이력
+├── LICENSE                            # MIT
 └── README.md                          # ← 이 파일
 ```
 
