@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
+"""Short readiness check (kept for compatibility; doctor.py is the full version
+with per-item fix commands). Same JSON keys as before: ok, missing_required,
+has_js_runtime, has_stt, executables, js_runtimes, stt."""
 from __future__ import annotations
 
 import argparse
 import importlib.util
 import json
-import shutil
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import find_executable  # noqa: E402
+from common import find_executable, find_tool, use_utf8_stdio  # noqa: E402
 
 
 REQUIRED_EXECUTABLES = ["yt-dlp", "ffmpeg", "ffprobe"]
@@ -29,21 +31,28 @@ def main() -> int:
     args = parser.parse_args()
 
     data = {
-        "executables": {name: find_executable(name) for name in REQUIRED_EXECUTABLES},
+        "executables": {name: (find_tool(name, fetch=False) if name in ("ffmpeg", "ffprobe") else find_executable(name))
+                        for name in REQUIRED_EXECUTABLES},
         "required_modules": {name: module_available(name) for name in REQUIRED_MODULES},
         "recommended_modules": {name: module_available(name) for name in RECOMMENDED_MODULES},
         "caption_modules": {name: module_available(name) for name in CAPTION_MODULES},
-        "js_runtimes": {name: shutil.which(name) for name in JS_RUNTIMES},
-        "stt": {"mlx_whisper": module_available("mlx_whisper")},
+        "js_runtimes": {name: find_tool(name) for name in JS_RUNTIMES},
+        "stt": {"mlx_whisper": module_available("mlx_whisper"), "faster_whisper": module_available("faster_whisper")},
     }
 
+    data["has_js_runtime"] = any(data["js_runtimes"].values())
     missing_required = [
         name for name, path in data["executables"].items() if not path
     ] + [
         name for name, ok in data["required_modules"].items() if not ok
     ]
-    data["has_js_runtime"] = any(data["js_runtimes"].values())
-    data["has_stt"] = data["stt"]["mlx_whisper"]
+    # yt-dlp cannot pass YouTube's EJS challenge without a JS runtime, and every
+    # visual run needs Pillow (contact sheets, study-view posters).
+    if not data["has_js_runtime"]:
+        missing_required.append("js-runtime (deno or node)")
+    if not data["recommended_modules"]["PIL"]:
+        missing_required.append("Pillow")
+    data["has_stt"] = any(data["stt"].values())
     data["ok"] = not missing_required
     data["missing_required"] = missing_required
 
@@ -60,4 +69,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    use_utf8_stdio()
     raise SystemExit(main())

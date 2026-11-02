@@ -2,7 +2,9 @@
 """QA for a rendered study view. Exits 1 and lists every problem found.
 
 Checks: each scene has a clip with an audio stream, every image the page
-references exists, in-page anchors resolve, and no template placeholder is left.
+references exists, in-page anchors resolve, no template placeholder is left, and
+every frame picked in selected-frames.json for a chapter the page covers is shown
+(as the item's scene or one of its sub-scenes).
 Attribute values are HTML-unescaped before comparing (``&amp;`` false alarms).
 """
 from __future__ import annotations
@@ -13,7 +15,7 @@ import re
 from pathlib import Path
 
 from common import has_audio_stream
-from study_spec import iter_scenes, load_study
+from study_spec import iter_scenes, load_study, selected_scene_gaps
 
 
 def main() -> int:
@@ -39,6 +41,8 @@ def main() -> int:
                 problems.append(f"clip missing: {clip.name}")
         elif not has_audio_stream(clip):
             problems.append(f"clip has no audio: {clip.name} (source fetched without --with-audio?)")
+
+    problems += selected_scene_gaps(spec)
 
     attrs = [html_mod.unescape(v) for v in re.findall(r'(?:src|href)="([^"]+)"', text)]
     for value in attrs:

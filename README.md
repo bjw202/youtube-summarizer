@@ -2,6 +2,99 @@
 
 > Claude Code 기반 YouTube 영상 자막 요약기. 영상 하나로 Markdown + HTML 비주얼 요약을 자동 생성합니다.
 
+## 설치
+
+Claude Code를 열고 이 문장을 붙여 넣으세요: `https://github.com/bjw202/youtube-summarizer 를 설치해줘. README의 AI 설치 안내대로`
+
+## AI 설치 안내 (For AI agents)
+
+Follow these steps in order. Works on macOS, Linux and Windows (PowerShell or Git Bash) — the commands are the same on every OS unless a step says otherwise.
+
+Rules:
+- **Never use administrator rights**: no `sudo`, no "Run as administrator", no system package managers (`brew`, `apt`, `winget`, `choco`) and no `pip install` outside the project. Everything installs into the project folder (`.venv`) and the user's own folders.
+- **Ask the user exactly one question** — step 5 (speech recognition). Do not ask anything else.
+- **If a step fails, do not improvise another way.** Retry only where a step says so, then stop and report the step, the command, and its full output to the user.
+
+### 1. Clone
+
+```bash
+git clone https://github.com/bjw202/youtube-summarizer.git
+cd youtube-summarizer
+```
+
+If a `youtube-summarizer` folder already exists and is a clone of this repository, use it as is (do not delete it). Run every later command **from this folder**.
+
+- Check: the file `.claude/skills/youtube-visual-summary/SKILL.md` exists.
+- Success: you are inside the cloned folder.
+
+### 2. uv
+
+Check whether uv is installed:
+
+```bash
+uv --version
+```
+
+If that fails, install uv for the user (no admin rights needed):
+
+- macOS / Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- Windows (PowerShell): `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+
+Then open a new shell and run `uv --version` again. If the new shell still cannot find `uv`, call the same binary by its install path for the rest of this guide: `~/.local/bin/uv` (macOS/Linux) or `$env:USERPROFILE\.local\bin\uv.exe` (Windows PowerShell).
+
+- Check: `uv --version`
+- Success: it prints a version such as `uv 0.x.y`.
+
+### 3. Install
+
+```bash
+uv run .claude/skills/youtube-visual-summary/scripts/install.py
+```
+
+Creates `.venv` with Python 3.12 (uv downloads it if needed) and installs yt-dlp, Pillow, ffmpeg (a static build, only when the system has none) and deno (JS runtime) into it. Safe to run more than once.
+
+- Check: the last lines start with `OK — <os>` and the command exits with code 0.
+- Success: `OK`. If it prints `NOT READY`, continue with step 4 — it tells you what to fix.
+
+### 4. Check and fix
+
+```bash
+uv run python .claude/skills/youtube-visual-summary/scripts/doctor.py --json
+```
+
+For every entry under `"checks"` whose `"ok"` is `false`, run its `"fix"` command from the project folder, then run `doctor.py --json` again. Repeat at most **2 times**. If an entry has `"fix": null`, show its `"hint"` to the user. Ignore `"optional"` here (that is step 5).
+
+If any check is still `false` after 2 retries, stop and report those entries (`missing`, `fix`, `hint`) to the user exactly as printed.
+
+- Check: the top-level `"ok"` in the JSON.
+- Success: `"ok": true` (and `"features"` → `"summary"` → `"ok": true`).
+
+### 5. Speech recognition (ask the user)
+
+Ask the user this one question: *"Install local speech recognition for videos that have no captions? It downloads about 1.5 GB."*
+
+If yes:
+
+```bash
+uv run .claude/skills/youtube-visual-summary/scripts/install.py --with-stt
+```
+
+(Apple Silicon Macs get mlx-whisper; other computers get faster-whisper. The model is downloaded once.)
+
+- Check: `doctor.py --json` → `"optional"` → `"stt"` → `"ok"`.
+- Success: `true`. If no, skip this step — it can be added later with the same command.
+
+### 6. Tell the user how to start
+
+Tell the user, in their language:
+
+> Open a terminal and run `cd <full path of the youtube-summarizer folder> && claude`, then paste a YouTube link (for example: `이 영상 요약해줘: https://www.youtube.com/watch?v=...`).
+
+(On Windows PowerShell 5, which has no `&&`, give the two commands on separate lines: `cd <folder>` then `claude`.)
+
+Success: the user has the folder path and the command.
+
+
 ## 원리
 
 ### 파이프라인 전체 흐름
@@ -95,9 +188,11 @@ youtube-summarizer/
 │           ├── chapters.codex.json    # 챕터 분할 결과
 │           ├── selected-frames.json   # 프레임 선택 결과
 │           ├── captions/              # 원본 자막 파일 (.vtt)
-│           ├── frames/                # 추출된 전체 프레임
+│           ├── frames/                # 추출된 후보 프레임 + manifest.json(후보 목록·버린 전환)
 │           ├── contact-sheets/        # Contact Sheet 이미지
-│           └── frame-source.mp4       # 다운로드한 원본 영상
+│           ├── timing.log             # 단계별 시작·끝 시각 (timing.py)
+│           ├── clean_run.log          # 원본 영상 정리 기록 (clean_run.py)
+│           └── frame-source.mp4       # 다운로드한 원본 영상 (Phase 9에서 지움)
 ├── CLAUDE.md                          # Claude Code 프로젝트 지침
 ├── HARNESS_PROMPT.md                  # 하네스 프롬프트
 └── README.md                          # ← 이 파일
@@ -152,26 +247,26 @@ runs/2026-06-09_134540_how-to-create-an-interactive-3d-gaussian-splat-from-1-ima
 Python 스크립트를 직접 실행할 수도 있습니다:
 
 ```bash
-# 1. 가상환경 설정
-python3 .claude/skills/youtube-visual-summary/scripts/setup_venv.py
+# 1. 설치 (위 "설치" 절과 같음)
+uv run .claude/skills/youtube-visual-summary/scripts/install.py
 
 # 2. 환경 확인
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/env_check.py --json
+uv run python .claude/skills/youtube-visual-summary/scripts/env_check.py --json
 
 # 3. 메타데이터 + 자막 다운로드
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/fetch_youtube.py "URL" --run-root runs
+uv run python .claude/skills/youtube-visual-summary/scripts/fetch_youtube.py "URL" --run-root runs
 
 # 4. 트랜스크립트 빌드
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/build_transcript.py runs/RUN_DIR
+uv run python .claude/skills/youtube-visual-summary/scripts/build_transcript.py runs/RUN_DIR
 
 # 5. 프레임 추출 (비주얼 요약용)
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/fetch_frame_source.py runs/RUN_DIR
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/extract_frames.py runs/RUN_DIR
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/make_contact_sheets.py runs/RUN_DIR
+uv run python .claude/skills/youtube-visual-summary/scripts/fetch_frame_source.py runs/RUN_DIR
+uv run python .claude/skills/youtube-visual-summary/scripts/extract_frames.py runs/RUN_DIR
+uv run python .claude/skills/youtube-visual-summary/scripts/make_contact_sheets.py runs/RUN_DIR
 
 # 6. 출력 렌더링
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/render_markdown.py runs/RUN_DIR
-.venv/bin/python .claude/skills/youtube-visual-summary/scripts/render_html.py runs/RUN_DIR
+uv run python .claude/skills/youtube-visual-summary/scripts/render_markdown.py runs/RUN_DIR
+uv run python .claude/skills/youtube-visual-summary/scripts/render_html.py runs/RUN_DIR
 ```
 
 ## 자막 정책

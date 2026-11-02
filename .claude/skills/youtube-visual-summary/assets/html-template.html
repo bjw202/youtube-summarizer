@@ -4,434 +4,123 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{TITLE}}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
-/* ══ Design tokens ══ */
-:root {
-  --bg:            #ffffff;
-  --bg-soft:       #f7f8fa;
-  --bg-sunken:     #eef1f5;
-  --surface:       #ffffff;
-  --border:        #e3e7ed;
-  --border-strong: #cbd3de;
+{{BASE_CSS}}
 
-  --text:          #16191d;
-  --text-body:     #2f343b;
-  --text-muted:    #626a75;
-  --text-faint:    #8a929c;
+/* ══ 요약 페이지 전용 배치 — 값은 base.css 토큰만 쓴다 ══ */
+.article { max-width: var(--read); }
+.intro .srcs { margin-top: var(--s-2); }
 
-  --accent:        #2f5cff;
-  --accent-soft:   #eef2ff;
-  --accent-line:   #b9c7ff;
+.chapter { padding: var(--s-12) 0; border-top: 1px solid var(--line); scroll-margin-top: var(--top); }
+.chapter:first-of-type { border-top: 0; padding-top: var(--s-2); }
+.ch-head { margin-bottom: var(--s-6); }
+.kicker { margin: 0 0 10px; font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: .1em; color: var(--accent); font-variant-numeric: tabular-nums; }
+.ch-head h2 { margin: 0 0 var(--s-3); font-size: var(--fs-xl); line-height: 1.3; letter-spacing: -.02em; font-weight: var(--fw-heavy); color: var(--ink); }
 
-  --key:           #0f7a5a;
-  --key-soft:      #e9f7f1;
-  --key-line:      #9fd9c5;
+.prose p { margin: 0 0 var(--s-4); }
+.chapter .points li { font-size: var(--fs-base); }
 
-  --note:          #a4620a;
-  --note-soft:     #fdf5e7;
-  --note-line:     #ecd3a3;
-
-  --radius:        10px;
-  --sidebar-w:     286px;
-  --content-w:     760px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg:            #0f1216;
-    --bg-soft:       #161a20;
-    --bg-sunken:     #1b2027;
-    --surface:       #14181e;
-    --border:        #262d36;
-    --border-strong: #39424e;
-
-    --text:          #eef1f5;
-    --text-body:     #c7ced7;
-    --text-muted:    #949daa;
-    --text-faint:    #6f7885;
-
-    --accent:        #7f9bff;
-    --accent-soft:   #182036;
-    --accent-line:   #33436e;
-
-    --key:           #4fd1a5;
-    --key-soft:      #10221d;
-    --key-line:      #245346;
-
-    --note:          #e5b567;
-    --note-soft:     #241d10;
-    --note-line:     #55431f;
-  }
-}
-
-/* ══ Base ══ */
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-html { font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; scroll-behavior: smooth; }
-body {
-  font-family: "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
-  background: var(--bg);
-  color: var(--text-body);
-  line-height: 1.78;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-a { color: var(--accent); }
-
-/* ══ Reading progress ══ */
-#progress {
-  position: fixed; top: 0; left: 0; height: 3px; width: 0%;
-  background: var(--accent); z-index: 100; transition: width .1s linear;
-}
-
-/* ══ Layout ══ */
-.layout {
-  display: grid;
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-  gap: 48px;
-  max-width: calc(var(--sidebar-w) + var(--content-w) + 48px + 80px);
-  margin: 0 auto;
-  padding: 0 40px;
-}
-.main { max-width: var(--content-w); padding: 40px 0 80px; min-width: 0; }
-
-/* ══ Sidebar ══ */
-.sidebar {
-  position: sticky; top: 0; align-self: start;
-  height: 100vh; overflow-y: auto;
-  padding: 40px 0 40px;
-  border-right: 1px solid var(--border);
-  margin-right: -24px; padding-right: 24px;
-  scrollbar-width: thin;
-}
-.sidebar::-webkit-scrollbar { width: 6px; }
-.sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
-
-.side-brand {
-  font-size: .6875rem; font-weight: 700; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
-}
-.side-title {
-  font-size: .9375rem; font-weight: 700; line-height: 1.5; color: var(--text);
-  margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--border);
-}
-.side-heading {
-  font-size: .6875rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
-  color: var(--text-faint); margin-bottom: 10px;
-}
-.toc-list { list-style: none; counter-reset: toc; }
-.toc-list li { counter-increment: toc; }
-.toc-list a {
-  display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px;
-  padding: 7px 10px 7px 8px; margin-left: -8px;
-  font-size: .8125rem; line-height: 1.5; color: var(--text-muted);
-  text-decoration: none; border-radius: 7px; border-left: 2px solid transparent;
-  transition: background .15s, color .15s;
-}
-.toc-list a::before {
-  content: counter(toc, decimal-leading-zero);
-  font-size: .6875rem; font-weight: 700; color: var(--text-faint);
-  font-variant-numeric: tabular-nums; padding-top: 2px;
-}
-.toc-list a:hover { background: var(--bg-soft); color: var(--text); }
-.toc-list a.active {
-  background: var(--accent-soft); color: var(--accent);
-  font-weight: 600; border-left-color: var(--accent);
-}
-.toc-list a.active::before { color: var(--accent); }
-.toc-time { display: block; font-size: .6875rem; color: var(--text-faint); font-variant-numeric: tabular-nums; }
-
-/* ══ Article header ══ */
-.eyebrow {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: .75rem; font-weight: 700; letter-spacing: .04em;
-  color: var(--accent); background: var(--accent-soft);
-  padding: 5px 11px; border-radius: 999px; margin-bottom: 18px;
-}
-.article-title {
-  font-size: 2.125rem; font-weight: 800; line-height: 1.32; letter-spacing: -.022em;
-  color: var(--text); margin-bottom: 20px;
-}
-.article-title a { color: inherit; text-decoration: none; }
-.article-title a:hover { color: var(--accent); }
-
-.meta-bar {
-  display: flex; flex-wrap: wrap; gap: 8px;
-  padding-bottom: 26px; border-bottom: 1px solid var(--border); margin-bottom: 28px;
-}
-.meta-chip {
-  display: inline-flex; align-items: baseline; gap: 6px;
-  font-size: .8125rem; color: var(--text-body);
-  background: var(--bg-soft); border: 1px solid var(--border);
-  padding: 5px 12px; border-radius: 999px;
-}
-.meta-chip b { font-weight: 600; color: var(--text-faint); font-size: .75rem; }
-
-.tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 32px; }
-.tag-list .tag {
-  font-size: .75rem; color: var(--text-muted);
-  background: var(--bg-sunken); padding: 4px 10px; border-radius: 5px;
-}
-
-/* ══ Chapter ══ */
-.chapter { scroll-margin-top: 24px; padding-bottom: 44px; margin-bottom: 44px; border-bottom: 1px solid var(--border); }
-.chapter:last-of-type { border-bottom: none; }
-
-.chapter-heading {
-  display: flex; align-items: flex-start; gap: 14px;
-  font-size: 1.5rem; font-weight: 700; line-height: 1.4; letter-spacing: -.018em;
-  color: var(--text); margin-bottom: 18px;
-}
-.chapter-num {
-  flex: none; display: inline-grid; place-items: center;
-  width: 32px; height: 32px; margin-top: 3px;
-  font-size: .8125rem; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: #fff; background: var(--accent); border-radius: 9px;
-}
-.chapter-time {
-  display: inline-block; margin-top: 6px;
-  font-size: .75rem; font-weight: 600; font-variant-numeric: tabular-nums;
-  color: var(--text-muted); background: var(--bg-sunken);
-  padding: 3px 9px; border-radius: 5px; text-decoration: none;
-  border: 1px solid transparent;
-}
-a.chapter-time:hover { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
-
-/* ══ Key point ══ */
-.keypoint {
-  position: relative; background: var(--key-soft);
-  border: 1px solid var(--key-line); border-left: 4px solid var(--key);
-  border-radius: var(--radius); padding: 16px 20px 17px; margin-bottom: 24px;
-}
-.keypoint-label {
-  display: block; font-size: .6875rem; font-weight: 800; letter-spacing: .07em;
-  color: var(--key); margin-bottom: 5px;
-}
-.keypoint p { font-size: 1rem; font-weight: 600; line-height: 1.68; color: var(--text); }
-
-/* ══ Body ══ */
-.summary-text p { font-size: 1.0625rem; line-height: 1.85; margin-bottom: 16px; }
-.summary-list { list-style: none; }
-.summary-list li {
-  position: relative; font-size: 1.0625rem; line-height: 1.82;
-  padding-left: 22px; margin-bottom: 13px;
-}
-.summary-list li::before {
-  content: ""; position: absolute; left: 4px; top: .72em;
-  width: 6px; height: 6px; border-radius: 50%; background: var(--accent-line);
-}
-.summary-text strong, .summary-list strong { color: var(--text); font-weight: 700; }
-code {
-  font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
-  font-size: .875em; background: var(--bg-sunken); border: 1px solid var(--border);
-  border-radius: 5px; padding: 1px 6px; color: var(--text);
-}
-
-/* ══ Commentary ══ */
-.commentary {
-  background: var(--note-soft); border: 1px solid var(--note-line);
-  border-radius: var(--radius); padding: 18px 22px 20px; margin-top: 26px;
-}
-.commentary-label {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: .6875rem; font-weight: 800; letter-spacing: .06em;
-  color: var(--note); margin-bottom: 8px;
-}
-.commentary-label::before {
-  content: ""; width: 14px; height: 14px; border-radius: 4px;
-  background: var(--note); opacity: .85;
-  -webkit-mask: no-repeat center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2zM9 20h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1z'/%3E%3C/svg%3E");
-          mask: no-repeat center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2zM9 20h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-1z'/%3E%3C/svg%3E");
-}
-.commentary p { font-size: 1rem; line-height: 1.82; color: var(--text-body); }
-.commentary p + p { margin-top: 12px; }
-
-/* ══ Figure ══ */
-.chapter-image { margin: 22px 0 24px; }
-.chapter-image img {
-  display: block; width: 100%; height: auto;
-  border: 1px solid var(--border); border-radius: var(--radius);
-}
-.chapter-image-caption {
-  font-size: .8125rem; color: var(--text-faint); margin-top: 9px; line-height: 1.6;
-}
-
-/* ══ Prompt card ══ */
-.prompt-card {
-  background: var(--bg-soft); border: 1px solid var(--border);
-  border-left: 4px solid var(--accent); border-radius: var(--radius);
-  padding: 14px 18px 16px; margin-top: 24px;
-}
-.prompt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-.prompt-label { font-size: .6875rem; font-weight: 800; letter-spacing: .06em; color: var(--accent); }
-.prompt-copy {
-  font: inherit; font-size: .75rem; font-weight: 700; color: var(--accent);
-  background: var(--accent-soft); border: 1px solid var(--accent-line);
-  border-radius: 6px; padding: 3px 10px; cursor: pointer;
-}
-.prompt-card pre {
-  font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
-  font-size: .875rem; line-height: 1.7; color: var(--text);
-  white-space: pre-wrap; word-break: break-word; margin: 0;
-}
-
-/* ══ Footer ══ */
-.article-footer {
-  margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border);
-  display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; align-items: center;
-  font-size: .8125rem; color: var(--text-faint);
-}
-.youtube-link {
-  display: inline-flex; align-items: center; gap: 7px;
-  font-size: .875rem; font-weight: 600; color: var(--accent); text-decoration: none;
-  border: 1px solid var(--accent-line); padding: 8px 15px; border-radius: 8px;
-}
-.youtube-link:hover { background: var(--accent-soft); }
-.youtube-link svg { width: 17px; height: 17px; }
-
-/* ══ Top button ══ */
-#totop {
-  position: fixed; right: 26px; bottom: 26px; z-index: 90;
-  width: 42px; height: 42px; display: grid; place-items: center;
-  background: var(--surface); color: var(--text-muted);
-  border: 1px solid var(--border-strong); border-radius: 50%;
-  cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .2s;
-  box-shadow: 0 2px 10px rgba(0,0,0,.09);
-}
-#totop.show { opacity: 1; pointer-events: auto; }
-#totop:hover { color: var(--accent); border-color: var(--accent); }
-
-/* ══ Responsive ══ */
-@media (max-width: 1080px) {
-  .layout { grid-template-columns: 1fr; gap: 0; padding: 0 28px; max-width: 820px; }
-  .sidebar {
-    position: static; height: auto; border-right: none; margin-right: 0; padding: 28px 0 0;
-  }
-  .side-title { display: none; }
-  .sidebar-inner {
-    background: var(--bg-soft); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 18px 20px;
-  }
-  .side-brand { display: none; }
-  .main { padding-top: 28px; }
-}
-@media (max-width: 640px) {
-  .layout { padding: 0 18px; }
-  /* 목차와 중복이고 세로로 길게 쌓여 본문을 밀어내므로 모바일에서는 숨긴다 */
-  .tag-list { display: none; }
-  .article-title { font-size: 1.5rem; }
-  .chapter-heading { font-size: 1.1875rem; gap: 10px; }
-  .chapter-num { width: 27px; height: 27px; font-size: .75rem; border-radius: 8px; }
-  .summary-list li, .summary-text p { font-size: 1rem; }
-  .keypoint, .commentary { padding-left: 15px; padding-right: 15px; }
-  #totop { right: 14px; bottom: 14px; }
-}
-@media print {
-  .sidebar, #progress, #totop { display: none; }
-  .layout { display: block; padding: 0; }
-  .chapter { break-inside: avoid; }
+@media (max-width: 900px) {
+  .chapter { padding: var(--s-8) 0; }
 }
 </style>
 </head>
 <body>
+<aside class="side" id="side">
+  <div class="side-top">
+    <p class="side-kicker">SUMMARY NOTES</p>
+    <p class="side-title">{{TITLE}}</p>
+    <div class="meter"><i id="meter"></i></div>
+    <div class="meter-label"><span>읽은 위치</span><span id="meter-text">0%</span></div>
+  </div>
+  <ol class="nav" id="nav">
+    {{TOC}}
+  </ol>
+</aside>
+<div class="scrim" id="scrim"></div>
 
-<div id="progress"></div>
+<div class="main">
+  <div class="topbar" id="topbar">
+    <button type="button" class="tb-icon menu-btn" id="menu" aria-label="목차 열기"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="crumb" id="crumb"><b>{{TITLE}}</b></div>
+    <button type="button" class="tb-icon" id="theme" aria-label="밝기 전환"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+  </div>
 
-<div class="layout">
+  <div class="wrap">
+    <div class="article">
+      <header class="intro">
+        <span class="eyebrow">{{LEVEL_LABEL}} · 챕터 {{CHAPTER_COUNT}}개</span>
+        <h1>{{TITLE}}</h1>
+        <div class="srcs">
+          <a class="src" href="{{URL}}" target="_blank" rel="noopener"><b>YouTube</b>{{CHANNEL}}<span>{{DURATION}}</span></a>
+        </div>
+      </header>
 
-  <aside class="sidebar">
-    <div class="sidebar-inner">
-      <div class="side-brand">Study Notes</div>
-      <div class="side-title">{{TITLE}}</div>
-      <div class="side-heading">목차</div>
-      <ol class="toc-list">
-        {{TOC}}
-      </ol>
+      {{CHAPTERS}}
+
+      <footer class="site-foot">
+        <span>{{TIMESTAMP}} 생성 · <a href="{{TOOL_URL}}" target="_blank" rel="noopener">youtube-visual-summary</a>로 만듦</span>
+        <a class="btn" href="{{URL}}" target="_blank" rel="noopener">원본 영상 보기</a>
+      </footer>
     </div>
-  </aside>
-
-  <main class="main">
-
-    <span class="eyebrow">YouTube 학습 정리</span>
-
-    <h1 class="article-title">
-      <a href="{{URL}}" target="_blank" rel="noopener">{{TITLE}}</a>
-    </h1>
-
-    <div class="meta-bar">
-      <span class="meta-chip"><b>채널</b> {{CHANNEL}}</span>
-      <span class="meta-chip"><b>길이</b> {{DURATION}}</span>
-      <span class="meta-chip"><b>정리 수준</b> {{SUMMARY_LEVEL}}</span>
-    </div>
-
-    <div class="tag-list">
-      {{TAGS}}
-    </div>
-
-    {{CHAPTERS}}
-
-    <div class="article-footer">
-      <span>생성일: {{TIMESTAMP}}</span>
-      <a class="youtube-link" href="{{URL}}" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-        원본 영상 보기
-      </a>
-    </div>
-
-  </main>
+  </div>
 </div>
-
-<button id="totop" aria-label="맨 위로">
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-</button>
+<div class="toast" id="toast"></div>
 
 <script>
 (function () {
-  var bar = document.getElementById('progress');
-  var totop = document.getElementById('totop');
-  var links = Array.prototype.slice.call(document.querySelectorAll('.toc-list a'));
-  var sections = links.map(function (a) {
-    return document.getElementById(a.getAttribute('href').slice(1));
+  var $ = function (s) { return document.querySelector(s); };
+  var root = document.documentElement;
+
+  /* 밝기: 처음엔 컴퓨터 설정, 버튼으로 바꾸면 모든 요약 페이지가 같은 선택을 기억한다 */
+  var THEME_KEY = 'yvs:theme';
+  try { var saved = localStorage.getItem(THEME_KEY); if (saved) root.dataset.theme = saved; } catch (e) {}
+  $('#theme').addEventListener('click', function () {
+    var dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark';
+    try { localStorage.setItem(THEME_KEY, root.dataset.theme); } catch (e) {}
   });
 
-  function onScroll() {
-    var h = document.documentElement;
-    var max = h.scrollHeight - h.clientHeight;
-    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
-    totop.classList.toggle('show', h.scrollTop > 600);
+  /* 좁은 화면 목차 */
+  var body = document.body;
+  $('#menu').addEventListener('click', function () { body.classList.add('nav-open'); });
+  $('#scrim').addEventListener('click', function () { body.classList.remove('nav-open'); });
 
+  /* 읽은 위치 + 지금 보는 챕터 */
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var sections = links.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); });
+  links.forEach(function (a) { a.addEventListener('click', function () { body.classList.remove('nav-open'); }); });
+  var meter = $('#meter'), meterText = $('#meter-text'), topbar = $('#topbar');
+  function onScroll() {
+    var h = document.documentElement, max = h.scrollHeight - h.clientHeight;
+    var pct = max > 0 ? Math.round(h.scrollTop / max * 100) : 0;
+    meter.style.width = pct + '%'; meterText.textContent = pct + '%';
+    topbar.classList.toggle('scrolled', h.scrollTop > 8);
     var idx = 0;
     for (var i = 0; i < sections.length; i++) {
-      if (sections[i] && sections[i].getBoundingClientRect().top <= 120) idx = i;
+      if (sections[i] && sections[i].getBoundingClientRect().top <= 140) idx = i;
     }
     links.forEach(function (a, i) { a.classList.toggle('active', i === idx); });
   }
-
   var ticking = false;
   window.addEventListener('scroll', function () {
-    if (!ticking) {
-      window.requestAnimationFrame(function () { onScroll(); ticking = false; });
-      ticking = true;
-    }
+    if (!ticking) { requestAnimationFrame(function () { onScroll(); ticking = false; }); ticking = true; }
   }, { passive: true });
-
-  totop.addEventListener('click', function () {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  });
-
   onScroll();
-})();
-</script>
 
-<script>
-document.querySelectorAll('.prompt-copy').forEach(function (btn) {
-  btn.addEventListener('click', function () {
-    var text = btn.closest('.prompt-card').querySelector('pre').innerText;
-    navigator.clipboard.writeText(text).then(function () {
-      var old = btn.textContent; btn.textContent = '복사됨';
-      setTimeout(function () { btn.textContent = old; }, 1500);
+  /* 프롬프트 복사 */
+  var toast = $('#toast'), toastTimer;
+  document.querySelectorAll('.prompt .copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var text = btn.closest('.prompt').querySelector('.prompt-text').innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        toast.textContent = '복사했습니다'; toast.classList.add('show');
+        clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1400);
+      });
     });
   });
-});
+})();
 </script>
 </body>
 </html>

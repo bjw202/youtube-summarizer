@@ -1,0 +1,40 @@
+{
+  "frames": [
+    {
+      "chapter_id": "chapter-01",
+      "frame_id": "chapter-01-f001",
+      "timestamp": 15.0,
+      "image_path": "frames/chapter-01/chapter-01-f001.jpg"
+    },
+    {
+      "chapter_id": "chapter-01",
+      "frame_id": "chapter-01-f002",
+      "timestamp": 30.0,
+      "image_path": "frames/chapter-01/chapter-01-f002.jpg"
+    },
+    {
+      "chapter_id": "chapter-02",
+      "frame_id": "chapter-02-f001",
+      "timestamp": 75.0,
+      "image_path": "frames/chapter-02/chapter-02-f001.jpg"
+    },
+    {
+      "chapter_id": "chapter-02",
+      "frame_id": "chapter-02-f002",
+      "timestamp": 90.0,
+      "image_path": "frames/chapter-02/chapter-02-f002.jpg"
+    },
+    {
+      "chapter_id": "chapter-03",
+      "frame_id": "chapter-03-f001",
+      "timestamp": 135.0,
+      "image_path": "frames/chapter-03/chapter-03-f001.jpg"
+    },
+    {
+      "chapter_id": "chapter-03",
+      "frame_id": "chapter-03-f002",
+      "timestamp": 150.0,
+      "image_path": "frames/chapter-03/chapter-03-f002.jpg"
+    }
+  ]
+}

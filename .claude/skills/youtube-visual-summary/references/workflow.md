@@ -10,15 +10,15 @@ Use this checklist for each request.
 
  2. Prepare `.venv`.
 
-    - Run `python3 skills/youtube-visual-summary/scripts/setup_venv.py` from the project root.
+    - Run `uv run python .claude/skills/youtube-visual-summary/scripts/doctor.py --json` from the project root.
+    - If `.venv` is missing or `ok` is false, run `uv run .claude/skills/youtube-visual-summary/scripts/install.py` (safe to repeat, no admin rights), then run the `fix` of any check still `ok: false`.
     - Tell the user this keeps Python packages inside the project root.
-    - After this step, run Python scripts with `.venv/bin/python skills/youtube-visual-summary/scripts/...`.
+    - Run every script with `uv run python .claude/skills/youtube-visual-summary/scripts/...` (works on macOS, Linux and Windows).
 
- 3. Run `env_check.py`.
+ 3. Read `doctor.py --json`.
 
-    - Required: `yt-dlp`, `ffmpeg`, `ffprobe`, Python 3.
-    - Recommended: `Pillow` for contact sheets.
-    - Do not check or install STT packages unless captions are absent and the user accepts STT.
+    - `features` says what can run: `summary`, `text_only`, `study_view`, `stt`.
+    - Speech recognition (`optional.stt`) is installed only when captions are absent and the user accepts (`install.py --with-stt`, about 1.5 GB).
 
  4. Run `fetch_youtube.py`.
 
@@ -40,9 +40,9 @@ Use this checklist for each request.
 
  7. Run `fetch_frame_source.py` by default unless the user explicitly asked for text-only output.
 
-    - It downloads a balanced 720p-or-lower video-only `_work/frame-source.*` file.
-    - It intentionally avoids audio and stream merging.
-    - If this fails, the text summary can still be produced from captions.
+    - Start it in the background right after the captions (SKILL.md Phase 3) and wait for it before Phase 5.
+    - It downloads a 720p-or-lower video-only `_work/frame-source.*` file; `--with-audio` (study view) gets one 1080p file with sound.
+    - If it fails: retry once, then run `install.py` (upgrades yt-dlp) and retry, then report the cause. Do not fall back to a text-only summary silently.
 
  8. Run `extract_frames.py` and `make_contact_sheets.py`.
 
@@ -50,9 +50,10 @@ Use this checklist for each request.
     - If no candidate matches the chapter, rerun extraction with a higher `--max-frames-per-chapter`.
     - Candidate frames and contact sheets are stored under `_work/frames/` and `_work/contact-sheets/`.
 
- 9. Create `_work/selected-frames.json`.
+ 9. Create `_work/selected-frames.json` with `frame_id`, `caption` and `reason` per scene, then run `fill_selections.py RUN_DIR`.
 
-    - Include a short reason for every selected frame.
+    - It fills `chapter_id`, `timestamp` and `image_path` (relative to `_work/`) from `_work/frames/manifest.json`.
+    - Include a short reason for every selected frame; `caption` is what readers see under the picture (`references/frame-selection-rubric.md`).
     - Prefer visual evidence over speaker faces.
 
 10. Run `render_markdown.py`.

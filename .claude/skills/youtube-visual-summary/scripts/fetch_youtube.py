@@ -8,7 +8,8 @@ import sys
 import time
 from pathlib import Path
 
-from common import build_yt_dlp_base_args, require_executable, run, slugify, work_dir, write_json
+from timing import mark as timing_mark
+from common import build_yt_dlp_base_args, caption_lang, require_executable, run, slugify, work_dir, write_json
 
 
 def fetch_metadata(yt_dlp: str, url: str) -> dict:
@@ -71,6 +72,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    began = dt.datetime.now()   # "Phase 3 start" for _work/timing.log (RUN_DIR does not exist yet)
     yt_dlp = require_executable("yt-dlp")
     run_root = Path(args.run_root)
     run_root.mkdir(parents=True, exist_ok=True)
@@ -119,14 +121,16 @@ def main() -> int:
 
     captions_dir = internal_dir / "captions"
     captions_dir.mkdir(parents=True, exist_ok=True)
+    timing_mark(run_dir, "Phase 3", "start", began)
 
     # Phase 2: Download captions — per-language with individual fallback
     outtmpl = str(captions_dir / "%(id)s.%(ext)s")
     any_success = False
 
     for lang in requested_langs:
-        # Check if captions for this language pattern already exist
-        existing_vtt = list(captions_dir.glob(f"*{lang}*.vtt"))
+        # Skip only when a file for exactly this language code exists — a substring
+        # match would take "<id>.ko.vtt" for "en" whenever the video id contains "en".
+        existing_vtt = [p for p in captions_dir.glob("*.vtt") if caption_lang(p) == lang.lower()]
         if existing_vtt:
             print(f"[fetch_youtube] captions for lang={lang} already exist, skipping", file=sys.stderr)
             any_success = True

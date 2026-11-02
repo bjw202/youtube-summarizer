@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from timing import mark as timing_mark
 from common import (
     VIDEO_CLIENT_FALLBACKS, VIDEO_SUFFIXES, HarnessError, build_yt_dlp_video_args, existing_work_dir,
     has_audio_stream, read_json, require_executable, run, write_json,
@@ -34,6 +35,17 @@ def main() -> int:
         raise HarnessError(f"missing input.json: {input_path}")
     url = read_json(input_path)["url"]
 
+    # _work/timing.log: the download runs in the background during Phase 4, so it marks
+    # itself ("download start" / "download end", or "download failed")
+    timing_mark(run_dir, "download", "start")
+    try:
+        return download(args, fmt, yt_dlp, internal_dir, url, run_dir)
+    except BaseException:
+        timing_mark(run_dir, "download", "failed")
+        raise
+
+
+def download(args: argparse.Namespace, fmt: str, yt_dlp: str, internal_dir: Path, url: str, run_dir: Path) -> int:
     for old_part in internal_dir.glob("frame-source.*.part"):
         old_part.unlink()
     if args.with_audio:
@@ -73,7 +85,7 @@ def main() -> int:
         raise HarnessError(
             "frame source download failed on every player client:\n  "
             + "\n  ".join(errors)
-            + "\nUpgrade yt-dlp first (re-run setup_venv.py), then see references/troubleshooting.md."
+            + "\nUpgrade yt-dlp first (re-run: uv run .claude/skills/youtube-visual-summary/scripts/install.py), then see references/troubleshooting.md."
         )
 
     sources = sorted(
@@ -98,6 +110,7 @@ def main() -> int:
         },
     )
     print(sources[0].resolve())
+    timing_mark(run_dir, "download", "end")
     return 0
 
 

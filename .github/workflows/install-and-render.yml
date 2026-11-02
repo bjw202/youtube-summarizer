@@ -1,0 +1,33 @@
+# Install on a clean machine and render a fake run — macOS, Windows, Linux.
+# Downloads from YouTube are left out on purpose (YouTube blocks GitHub's servers);
+# tests/fixtures/run-basic is a made-up run with hand-written captions and solid-colour images.
+name: install-and-render
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: install.py (fresh .venv)
+        run: uv run .claude/skills/youtube-visual-summary/scripts/install.py
+
+      - name: install.py again (must be safe to repeat)
+        run: uv run .claude/skills/youtube-visual-summary/scripts/install.py --no-doctor
+
+      - name: doctor.py --json
+        run: uv run python .claude/skills/youtube-visual-summary/scripts/doctor.py --json
+
+      - name: fixture tests (build_transcript … render_html, check_summary, check_design)
+        run: uv run python tests/run_fixture_tests.py

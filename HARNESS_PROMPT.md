@@ -10,7 +10,7 @@ YouTube 공개 영상의 자막 기반 비주얼 요약을 수행하는 하네�
 
 ### 참고 구현
 
-`/Users/byunjungwon/Dev/codex/youtube-summary/skills/youtube-visual-summary/` 경로에 Codex용으로 이미 구현된 동일 기능의 하네스가 있어. 이걸 Claude Code용으로 포팅하면서 아래 변경사항을 반영해:
+`<Codex 원본 저장소>/skills/youtube-visual-summary/` 경로에 Codex용으로 이미 구현된 동일 기능의 하네스가 있어. 이걸 Claude Code용으로 포팅하면서 아래 변경사항을 반영해:
 
 1. **Codex 하네스의 핵심 스크립트 9개를 그대로 가져와서** `.claude/skills/youtube-visual-summary/scripts/` 에 번들링해:
 
@@ -471,10 +471,10 @@ runs/YYYY-MM-DD_HHMMSS_slug/
 
 스크립트와 참고 문서는 이 경로에서 직접 읽어서 포팅해:
 
-- 스크립트: `/Users/byunjungwon/Dev/codex/youtube-summary/skills/youtube-visual-summary/scripts/`
-- 참고문서: `/Users/byunjungwon/Dev/codex/youtube-summary/skills/youtube-visual-summary/references/`
-- 템플릿: `/Users/byunjungwon/Dev/codex/youtube-summary/skills/youtube-visual-summary/assets/`
-- SKILL.md: `/Users/byunjungwon/Dev/codex/youtube-summary/skills/youtube-visual-summary/SKILL.md`
+- 스크립트: `<Codex 원본 저장소>/skills/youtube-visual-summary/scripts/`
+- 참고문서: `<Codex 원본 저장소>/skills/youtube-visual-summary/references/`
+- 템플릿: `<Codex 원본 저장소>/skills/youtube-visual-summary/assets/`
+- SKILL.md: `<Codex 원본 저장소>/skills/youtube-visual-summary/SKILL.md`
 
 ### CLAUDE.md 포인터
 

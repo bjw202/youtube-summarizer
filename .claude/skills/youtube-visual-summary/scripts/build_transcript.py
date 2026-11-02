@@ -6,7 +6,7 @@ import html
 import re
 from pathlib import Path
 
-from common import HarnessError, existing_work_dir, parse_ts, read_json, write_json
+from common import HarnessError, caption_base_lang, caption_lang, existing_work_dir, parse_ts, read_json, write_json
 
 
 TIME_RE = re.compile(
@@ -104,40 +104,69 @@ def collapse_rolling_segments(segments: list[dict], max_duration: float = 14.0) 
     return output
 
 
-def score_caption(path: Path, prefer_lang: str | None = None) -> tuple[int, str]:
+def score_caption(path: Path) -> tuple[int, str]:
+    """Sort key: Korean > English, uploader tracks > auto-generated."""
     name = path.name.lower()
+    lang = caption_lang(path) or ""
+    base = caption_base_lang(path)
     score = 0
-    if prefer_lang and re.search(rf"\.{re.escape(prefer_lang.lower())}(-[^.]+)?\.vtt$", name):
-        score += 1000
-    if ".ko" in name:
+    if base == "ko":
         score += 100
-    if ".en" in name:
+    if base == "en":
         score += 80
     # uploader-provided tracks come as e.g. ".en-j3PyPqV-e1s.vtt"; they beat
     # the auto-generated ".en.vtt", which mangles proper nouns.
-    if re.search(r"\.[a-z]{2}-[^.]+\.vtt$", name) and "-orig" not in name:
+    if re.fullmatch(r"[a-z]{2}-.+", lang) and "-orig" not in lang:
         score += 15
     if "auto" not in name:
         score += 10
     return (-score, name)
 
 
+def caption_kind(path: Path, metadata: dict) -> str | None:
+    """'manual' when the uploader made this track, 'auto' when YouTube generated it,
+    None when metadata.json cannot tell (then the study view shows no label).
+    yt-dlp writes the uploader's track when a language has both, so manual wins."""
+    lang = caption_lang(path)
+    if not lang:
+        return None
+    manual = {k.lower() for k in (metadata.get("subtitles") or {})}
+    auto = {k.lower() for k in (metadata.get("automatic_captions") or {})}
+    if lang in manual:
+        return "manual"
+    if lang in auto:
+        return "auto"
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Normalize downloaded YouTube captions to transcript.json.")
     parser.add_argument("run_dir")
-    parser.add_argument("--lang", default=None, help="caption language to force as canonical, e.g. en (default: ko > en)")
+    parser.add_argument("--lang", default=None,
+                        help="use only captions in this language, e.g. en (its uploader and auto tracks); "
+                             "fails if there are none. Default: best of ko > en")
     args = parser.parse_args()
 
     run_dir = Path(args.run_dir)
     internal_dir = existing_work_dir(run_dir)
     metadata = read_json(internal_dir / "metadata.json")
-    caption_files = sorted((internal_dir / "captions").glob("*.vtt"), key=lambda p: score_caption(p, args.lang))
+    caption_files = sorted((internal_dir / "captions").glob("*.vtt"), key=score_caption)
     if not caption_files:
-        caption_files = sorted(internal_dir.glob("*.vtt"), key=lambda p: score_caption(p, args.lang))
+        caption_files = sorted(internal_dir.glob("*.vtt"), key=score_caption)
     if not caption_files:
         raise HarnessError(
             "no VTT captions found. Default workflow stops here; ask before using optional local STT."
         )
+    if args.lang:
+        wanted = args.lang.lower()
+        forced = [p for p in caption_files if caption_base_lang(p) == wanted or caption_lang(p) == wanted]
+        if not forced:
+            available = ", ".join(sorted({caption_lang(p) or p.name for p in caption_files}))
+            raise HarnessError(
+                f"no captions in language '{args.lang}' (available: {available}). "
+                f"Download that track first, or run without --lang."
+            )
+        caption_files = forced
 
     chosen = caption_files[0]
     segments = collapse_rolling_segments(parse_vtt(chosen))
@@ -148,6 +177,7 @@ def main() -> int:
         "source": "caption",
         "caption_file": chosen.name,
         "language": chosen.suffixes[-2].lstrip(".") if len(chosen.suffixes) >= 2 else None,
+        "caption_kind": caption_kind(chosen, metadata),  # manual | auto | None (unknown)
         "video_title": metadata.get("title"),
         "segments": segments,
     }

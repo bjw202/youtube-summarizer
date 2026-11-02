@@ -7,14 +7,13 @@ import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from common import HarnessError, existing_work_dir, format_ts, group_selections, place_selections, read_json
+from common import TOOL_URL, existing_work_dir, format_ts, group_selections, load_page_template, place_selections, read_json
 
 
 KST = timezone(timedelta(hours=9))
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-SKILL_DIR = SCRIPT_DIR.parent
-TEMPLATE_PATH = SKILL_DIR / "assets" / "html-template.html"
+LEVEL_LABELS = {"short": "간단 정리", "normal": "보통 정리", "detailed": "상세 정리"}
+PLAY_ICON = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>'
 
 
 def escape(text: str) -> str:
@@ -39,16 +38,11 @@ def build_tags(chapters: list[dict]) -> str:
 
 def build_toc(chapters: list[dict]) -> str:
     parts = []
-    for ch in chapters:
+    for index, ch in enumerate(chapters, start=1):
         cid = ch.get("id", "")
         title = escape(ch.get("title", ""))
-        start = format_ts(ch.get("start", 0))
-        end = format_ts(ch.get("end", 0))
-        parts.append(
-            f'<li><a href="#{cid}"><span>{title}'
-            f'<span class="toc-time">{start} ~ {end}</span></span></a></li>'
-        )
-    return "\n      ".join(parts)
+        parts.append(f'<li><a href="#{cid}"><span class="no">{index:02d}</span><span>{title}</span></a></li>')
+    return "\n    ".join(parts)
 
 
 def watch_url(url: str, seconds: float) -> str:
@@ -70,10 +64,10 @@ def build_figures(ch: dict, placed: list, run_dir: Path, url: str) -> str:
             ts_str = (f'<a href="{escape(watch_url(url, ts))}" target="_blank" rel="noopener">'
                       f'{ts_str}</a>')
         note = render_inline(sel.get("caption") or sel.get("reason", ""))
-        out += '\n  <div class="chapter-image">\n'
+        out += '\n  <figure class="figure">\n'
         out += f'    <img src="{img_rel}" alt="{alt}" loading="lazy">\n'
-        out += f'    <div class="chapter-image-caption">Frame: {ts_str}. {note}</div>\n'
-        out += '  </div>\n'
+        out += f'    <figcaption>{ts_str} · {note}</figcaption>\n'
+        out += '  </figure>\n'
     return out
 
 
@@ -95,23 +89,25 @@ def build_chapters(
         if url:
             href = escape(watch_url(url, ch.get("start", 0)))
             time_tag = (
-                f'<a class="chapter-time" href="{href}" target="_blank" rel="noopener" '
-                f'title="이 지점부터 영상 보기">{time_label}</a>'
+                f'<a class="time-chip" href="{href}" target="_blank" rel="noopener" '
+                f'title="이 지점부터 영상 보기">{PLAY_ICON}{time_label}</a>'
             )
         else:
-            time_tag = f'<span class="chapter-time">{time_label}</span>'
+            time_tag = f'<span class="time-chip">{time_label}</span>'
 
         section = f'<section class="chapter" id="{cid}">\n'
         section += (
-            f'  <h2 class="chapter-heading">'
-            f'<span class="chapter-num">{index:02d}</span>'
-            f'<span>{title}<br>{time_tag}</span></h2>\n'
+            f'  <header class="ch-head">\n'
+            f'    <p class="kicker">CHAPTER {index:02d}</p>\n'
+            f'    <h2>{title}</h2>\n'
+            f'    {time_tag}\n'
+            f'  </header>\n'
         )
 
         key_point = ch.get("key_point")
         if key_point:
-            section += '\n  <div class="keypoint">\n'
-            section += '    <span class="keypoint-label">핵심 정리</span>\n'
+            section += '\n  <div class="callout key">\n'
+            section += '    <span class="callout-label">핵심</span>\n'
             section += f"    <p>{render_inline(key_point)}</p>\n"
             section += "  </div>\n"
 
@@ -120,21 +116,21 @@ def build_chapters(
 
         paragraphs = ch.get("summary_paragraphs", [])
         if paragraphs:
-            section += '\n  <div class="summary-text">\n'
+            section += '\n  <div class="prose">\n'
             for para in paragraphs:
                 section += f"    <p>{render_inline(para)}</p>\n"
             section += "  </div>\n"
 
         bullets = ch.get("summary_bullets", [])
         if bullets:
-            section += '\n  <ul class="summary-list">\n'
+            section += '\n  <ul class="points">\n'
             for i, bullet in enumerate(bullets):
                 section += f"    <li>{render_inline(bullet)}</li>\n"
                 if i in placed and i < len(bullets) - 1:
                     # close the list so the figure spans the column, then resume
                     section += "  </ul>\n"
                     section += build_figures(ch, placed.pop(i), images_dir.parent, url)
-                    section += '  <ul class="summary-list">\n'
+                    section += '  <ul class="points">\n'
             section += "  </ul>\n"
         for rest in placed.values():
             section += build_figures(ch, rest, images_dir.parent, url)
@@ -142,17 +138,17 @@ def build_chapters(
         prompt = ch.get("prompt")
         if prompt:
             label = escape(prompt.get("title") or "따라 하기 프롬프트")
-            section += '\n  <div class="prompt-card">\n'
-            section += (f'    <div class="prompt-head"><span class="prompt-label">{label}</span>'
-                        f'<button class="prompt-copy" type="button">복사</button></div>\n')
-            section += f'    <pre>{escape(prompt["text"].rstrip())}</pre>\n'
+            section += '\n  <div class="prompt">\n'
+            section += (f'    <div class="prompt-head"><span>{label}</span>'
+                        f'<button class="copy" type="button">복사</button></div>\n')
+            section += f'    <pre class="prompt-text">{escape(prompt["text"].rstrip())}</pre>\n'
             section += "  </div>\n"
 
         commentary = ch.get("commentary")
         if commentary:
             paras = commentary if isinstance(commentary, list) else [commentary]
-            section += '\n  <div class="commentary">\n'
-            section += '    <span class="commentary-label">해설</span>\n'
+            section += '\n  <div class="callout note">\n'
+            section += '    <span class="callout-label">해설</span>\n'
             for para in paras:
                 section += f"    <p>{render_inline(para)}</p>\n"
             section += "  </div>\n"
@@ -179,10 +175,7 @@ def main() -> int:
     images_dir = run_dir / "images"
     images_dir.mkdir(exist_ok=True)
 
-    if not TEMPLATE_PATH.exists():
-        raise HarnessError(f"HTML template not found: {TEMPLATE_PATH}")
-
-    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    template = load_page_template("html-template.html")  # base.css inlined
 
     url = metadata.get("webpage_url") or read_json(internal_dir / "input.json").get("url", "")
     title = metadata.get("title") or "YouTube Visual Summary"
@@ -198,6 +191,9 @@ def main() -> int:
     result = result.replace("{{CHANNEL}}", escape(channel))
     result = result.replace("{{DURATION}}", duration)
     result = result.replace("{{SUMMARY_LEVEL}}", summary_level)
+    result = result.replace("{{LEVEL_LABEL}}", LEVEL_LABELS.get(summary_level.split("-")[0], summary_level))
+    result = result.replace("{{CHAPTER_COUNT}}", str(len(chapters)))
+    result = result.replace("{{TOOL_URL}}", TOOL_URL)
     result = result.replace("{{TAGS}}", build_tags(chapters))
     result = result.replace("{{TOC}}", build_toc(chapters))
     result = result.replace("{{CHAPTERS}}", build_chapters(chapters, selections, internal_dir, images_dir, url))

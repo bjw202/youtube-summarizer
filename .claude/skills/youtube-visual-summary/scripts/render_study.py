@@ -11,16 +11,17 @@ import argparse
 import html as html_mod
 import json
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from common import format_ts
+from common import TOOL_URL, format_ts, load_page_template
 from study_spec import load_study, resolve_scene
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-SKILL_DIR = SCRIPT_DIR.parent
-TEMPLATE_PATH = SKILL_DIR / "assets" / "study-template.html"
+KST = timezone(timedelta(hours=9))
 
 RATES = ["0.75", "1", "1.25", "1.5"]
+AUTO_KINDS = {"auto", "stt"}  # transcript.json caption_kind values that get the warning label
+AUTO_NOTE = "자동 생성 자막 — 받아쓰기 오류가 있을 수 있음"
 ICON_PLAY = '<path class="i-play" d="M8 5.5v13l10.5-6.5z"/><path class="i-pause" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/>'
 ICON_LOOP = '<path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>'
 ICON_FULL = '<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>'
@@ -77,6 +78,8 @@ def build_variant(spec: dict, name: str, scene: dict, label: str, run_dir: Path)
         "ts": s["start"],
         "lines": lines,
         "paras": s["chapter"].get("summary_paragraphs", []),
+        # only present when true, so pages of older runs render exactly as before
+        **({"autoCaptions": True} if src.get("caption_kind") in AUTO_KINDS else {}),
     }
 
 
@@ -131,10 +134,11 @@ def build_section(item: dict, n: int, count: int, kicker: str, variants: list[di
     related = "".join(f'<a href="#{escape(r)}">{escape(names[r])}</a>' for r in item.get("related", []) if r in names)
     related = f'<div class="related"><span>관련</span>{related}</div>' if related else "<div></div>"
     script = ""
+    note = f'\n      <p class="caption-note">{AUTO_NOTE}</p>' if v0.get("autoCaptions") else ""
     if v0["lines"]:
         script = f'''
     <details class="script" open>
-      <summary>자막 따라 읽기 <span class="hint">재생하면 지금 문장이 표시됩니다 · 문장을 누르면 그 지점부터</span></summary>
+      <summary>자막 따라 읽기 <span class="hint">재생하면 지금 문장이 표시됩니다 · 문장을 누르면 그 지점부터</span></summary>{note}
       <ol>{script_lines(v0["lines"])}</ol>
     </details>'''
     return f'''
@@ -201,8 +205,10 @@ def build_body(spec: dict, run_dir: Path) -> tuple[str, str, str, dict]:
         kicker = group.get("en") or name or "Chapter"
         nav_items, group_tiles = [], []
         for n, item in enumerate(items, 1):
-            scenes = [(item["id"], item["scene"], item["name"])]
-            scenes += [(f'{item["id"]}--{sub["id"]}', sub["scene"], sub["name"]) for sub in item.get("subs", [])]
+            # tab labels: optional short ``label``, else the name
+            scenes = [(item["id"], item["scene"], item.get("label") or item["name"])]
+            scenes += [(f'{item["id"]}--{sub["id"]}', sub["scene"], sub.get("label") or sub["name"])
+                       for sub in item.get("subs", [])]
             variants = [build_variant(spec, nm, sc, label, run_dir) for nm, sc, label in scenes]
             players[item["id"]] = variants
             sections.append(build_section(item, n, len(items), kicker, variants, names))
@@ -263,7 +269,7 @@ def main() -> int:
     total = len(spec["items"])
     missing = sum(1 for vs in players.values() for v in vs if not v["clip"])
 
-    result = TEMPLATE_PATH.read_text(encoding="utf-8")
+    result = load_page_template("study-template.html")  # base.css inlined
     for key, value in {
         "TITLE": escape(spec["title"]),
         "SUBTITLE": escape(spec.get("subtitle", "")),
@@ -274,6 +280,8 @@ def main() -> int:
         "TILES": tiles,
         "CHEATS": cheats,
         "TOTAL": str(total),
+        "TOOL_URL": TOOL_URL,
+        "TIMESTAMP": datetime.now(KST).strftime("%Y-%m-%d %H:%M"),
         "PLAYERS": json.dumps(players, ensure_ascii=False).replace("</", "<\\/"),
     }.items():
         result = result.replace("{{" + key + "}}", value)

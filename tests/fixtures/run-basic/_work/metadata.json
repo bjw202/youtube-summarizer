@@ -1,0 +1,26 @@
+{
+  "id": "Fixture0en0ko",
+  "title": "물 끓는점 실험 (테스트용 가짜 영상)",
+  "channel": "테스트 채널",
+  "duration": 180,
+  "duration_string": "3:00",
+  "webpage_url": "https://www.youtube.com/watch?v=Fixture0en0ko",
+  "description": "테스트용으로 만든 가짜 영상 정보입니다.",
+  "chapters": [
+    {
+      "start_time": 0.0,
+      "end_time": 60.0,
+      "title": "실험 준비"
+    },
+    {
+      "start_time": 60.0,
+      "end_time": 120.0,
+      "title": "물이 끓는 순간"
+    },
+    {
+      "start_time": 120.0,
+      "end_time": 180.0,
+      "title": "산에서는 왜 다를까"
+    }
+  ]
+}

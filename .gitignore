@@ -15,5 +15,18 @@ __pycache__/
 *.mp3
 *.mp4
 **/_work/
+# 예외: 테스트용 가짜 run (직접 만든 자막·단색 이미지, 실제 영상 자료 없음)
+!tests/fixtures/*/_work/
 *.log
 *.bak
+
+# 이 맥에서만 쓰는 부분 — 지우지 않고 추적만 하지 않는다 (공개판은 youtube-visual-summary 하나)
+.claude/agents/
+.claude/skills/technical-seminar-deck/
+.claude/skills/research-synthesis-report/
+.claude/skills/docs-site-crawl/
+scripts_for_runs/
+CLAUDE.local.md
+
+# 개인 STT 용어 프롬프트 (stt_transcribe.py가 있으면 읽는다)
+.claude/skills/youtube-visual-summary/stt-prompt.local.txt

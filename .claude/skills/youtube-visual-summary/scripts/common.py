@@ -28,30 +28,123 @@ def write_json(path: Path, data: Any) -> None:
         f.write("\n")
 
 
+# Child processes (yt-dlp is Python too) talk UTF-8 regardless of the OS locale —
+# a Korean Windows console defaults to cp949, which cannot hold every title.
+CHILD_ENV = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+
+
 def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True)
+    proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True,
+                          encoding="utf-8", errors="replace", env=CHILD_ENV)
     if proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip()
         raise HarnessError(f"command failed: {' '.join(cmd)}\n{detail}")
     return proc
 
 
+def use_utf8_stdio() -> None:
+    """Print UTF-8 on every OS (Windows pipes default to the locale code page)."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
+# Every script imports this module, so this one call covers them all: run-folder
+# names hold Korean and other non-ASCII text that cp949 (Korean Windows) may not encode.
+use_utf8_stdio()
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+IS_WINDOWS = sys.platform == "win32"
+BIN_DIR_NAME = "Scripts" if IS_WINDOWS else "bin"
+# Found on the system first, then in the project .venv (install.py puts copies there)
+SYSTEM_FIRST_TOOLS = ("ffmpeg", "ffprobe", "deno", "node")
+
+
+def venv_bin_dirs() -> list[Path]:
+    """bin/ (Scripts\\ on Windows) of the running venv and of the project .venv."""
+    dirs: list[Path] = []
+    for prefix in (os.environ.get("VIRTUAL_ENV"), sys.prefix, str(PROJECT_ROOT / ".venv")):
+        if not prefix:
+            continue
+        d = Path(prefix) / BIN_DIR_NAME
+        if d.is_dir() and d.resolve() not in [x.resolve() for x in dirs]:
+            dirs.append(d)
+    return dirs
+
+
+def system_path() -> str:
+    """PATH without the venv bin dirs. `uv run` puts .venv first on PATH; tools
+    that the system already has must still win over the copies in .venv."""
+    venv = {d.resolve() for d in venv_bin_dirs()}
+    keep = []
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not entry:
+            continue
+        try:
+            if Path(entry).resolve() in venv:
+                continue
+        except OSError:
+            pass
+        keep.append(entry)
+    return os.pathsep.join(keep)
+
+
+def static_ffmpeg_tool(name: str, fetch: bool = True) -> str | None:
+    """ffmpeg/ffprobe from the static-ffmpeg package (installed in .venv by
+    install.py). The binaries are downloaded for this OS on first use."""
+    try:
+        import static_ffmpeg.run as sf
+    except ImportError:
+        return None
+    exe = name + (".exe" if IS_WINDOWS else "")
+    cached = Path(sf.get_platform_dir()) / exe
+    if cached.is_file():
+        return str(cached)
+    if not fetch:
+        return None
+    import contextlib
+    with contextlib.redirect_stdout(sys.stderr):  # it prints download progress
+        ffmpeg, ffprobe = sf.get_or_fetch_platform_executables_else_raise()
+    return ffmpeg if name == "ffmpeg" else ffprobe
+
+
+def find_tool(name: str, fetch: bool = True) -> str | None:
+    """Locate ffmpeg, ffprobe, deno or node: system PATH first, then .venv.
+    ffmpeg/ffprobe fall back to static-ffmpeg (downloads once when fetch=True)."""
+    found = shutil.which(name, path=system_path())
+    if found:
+        return found
+    for d in venv_bin_dirs():
+        found = shutil.which(name, path=str(d))
+        if found:
+            return found
+    if name in ("ffmpeg", "ffprobe"):
+        return static_ffmpeg_tool(name, fetch=fetch)
+    return None
+
+
 def require_executable(name: str) -> str:
-    found = find_executable(name)
+    found = find_tool(name) if name in SYSTEM_FIRST_TOOLS else find_executable(name)
     if not found:
-        raise HarnessError(f"missing executable: {name}")
+        raise HarnessError(f"missing executable: {name} — run: uv run "
+                           f".claude/skills/youtube-visual-summary/scripts/install.py")
     return found
 
 
 def find_executable(name: str) -> str | None:
+    """Python tools such as yt-dlp: the venv copy first (a system yt-dlp is often
+    too old for YouTube), then PATH."""
     venv = os.environ.get("VIRTUAL_ENV")
     if venv:
-        venv_candidate = Path(venv) / ("Scripts" if sys.platform == "win32" else "bin") / name
-        if venv_candidate.exists() and os.access(venv_candidate, os.X_OK):
-            return str(venv_candidate)
-    sys_prefix_candidate = Path(sys.prefix) / ("Scripts" if sys.platform == "win32" else "bin") / name
-    if sys_prefix_candidate.exists() and os.access(sys_prefix_candidate, os.X_OK):
-        return str(sys_prefix_candidate)
+        found = shutil.which(name, path=str(Path(venv) / BIN_DIR_NAME))
+        if found:
+            return found
+    found = shutil.which(name, path=str(Path(sys.prefix) / BIN_DIR_NAME))
+    if found:
+        return found
     found = shutil.which(name)
     if found:
         return found
@@ -68,12 +161,19 @@ def find_executable(name: str) -> str | None:
     return None
 
 
-def find_js_runtime() -> str | None:
-    """Return the first available JS runtime (deno preferred over node)."""
+def find_js_runtime_path() -> tuple[str, str] | None:
+    """(name, path) of the JS runtime yt-dlp should use — deno preferred over node."""
     for name in ("deno", "node"):
-        if shutil.which(name):
-            return name
+        path = find_tool(name)
+        if path:
+            return name, path
     return None
+
+
+def find_js_runtime() -> str | None:
+    """Return the first available JS runtime name (deno preferred over node)."""
+    found = find_js_runtime_path()
+    return found[0] if found else None
 
 
 def has_impersonation() -> bool:
@@ -90,19 +190,22 @@ def has_impersonation() -> bool:
     return True
 
 
-_remote_components_supported: bool | None = None
+_yt_dlp_help: dict[str, str] = {}
+
+
+def supports_option(yt_dlp: str, option: str) -> bool:
+    """Whether this yt-dlp build accepts ``option`` (its --help is read once)."""
+    if yt_dlp not in _yt_dlp_help:
+        try:
+            _yt_dlp_help[yt_dlp] = run([yt_dlp, "--help"]).stdout
+        except Exception:
+            _yt_dlp_help[yt_dlp] = ""
+    return option in _yt_dlp_help[yt_dlp]
 
 
 def supports_remote_components(yt_dlp: str) -> bool:
     """Detect once whether this yt-dlp build accepts --remote-components."""
-    global _remote_components_supported
-    if _remote_components_supported is None:
-        try:
-            proc = run([yt_dlp, "--help"])
-            _remote_components_supported = "--remote-components" in proc.stdout
-        except Exception:
-            _remote_components_supported = False
-    return _remote_components_supported
+    return supports_option(yt_dlp, "--remote-components")
 
 
 def build_yt_dlp_base_args(yt_dlp: str) -> list[str]:
@@ -115,13 +218,26 @@ def build_yt_dlp_base_args(yt_dlp: str) -> list[str]:
       browser to avoid YouTube 403/429 bot-detection.
     """
     args = [yt_dlp]
-    if find_js_runtime() and supports_remote_components(yt_dlp):
+    runtime = find_js_runtime_path()
+    if runtime and supports_option(yt_dlp, "--js-runtimes"):
+        # name the exact binary: under `uv run`, a deno inside .venv would otherwise
+        # shadow the system one, and node is only used when named explicitly
+        args += ["--js-runtimes", f"{runtime[0]}:{runtime[1]}"]
+    if runtime and supports_remote_components(yt_dlp):
         args.append("--remote-components")
         args.append("ejs:github")
     if has_impersonation():
         args.append("--impersonate")
         args.append("chrome")
+    args += ffmpeg_location_args(fetch=False)
     return args
+
+
+def ffmpeg_location_args(fetch: bool = True) -> list[str]:
+    """yt-dlp looks for ffmpeg only on PATH; name the one find_tool chose so a
+    static-ffmpeg copy inside .venv is used too (merging, audio extraction)."""
+    ffmpeg = find_tool("ffmpeg", fetch=fetch)
+    return ["--ffmpeg-location", ffmpeg] if ffmpeg else []
 
 
 # Player-client attempts for video data, tried in order by fetch_frame_source.
@@ -150,7 +266,7 @@ def build_yt_dlp_video_args(yt_dlp: str, player_client: str | None = None) -> li
     default still 403ed, the pinned pair returned "Video unavailable", and
     yt-dlp 2026.8.19's new default (``visionos``) worked. So the default call
     pins nothing, and callers iterate ``VIDEO_CLIENT_FALLBACKS``. If every
-    attempt fails, upgrade yt-dlp first (``setup_venv.py`` does this), then
+    attempt fails, upgrade yt-dlp first (``install.py`` does this), then
     check ``yt-dlp -v`` to see which client is being selected.
     """
     args = [yt_dlp]
@@ -160,6 +276,7 @@ def build_yt_dlp_video_args(yt_dlp: str, player_client: str | None = None) -> li
     if player_client:
         args.append("--extractor-args")
         args.append(f"youtube:player_client={player_client}")
+    args += ffmpeg_location_args(fetch=True)
     return args
 
 
@@ -168,6 +285,26 @@ def slugify(value: str, max_len: int = 80) -> str:
     value = re.sub(r"\s+", "-", value.strip())
     value = value.strip(".-").lower()
     return (value or "video")[:max_len]
+
+
+def caption_lang(path: Path) -> str | None:
+    """Language code of a caption file named ``<video id>.<lang>.vtt``.
+
+    YouTube ids never contain dots, so the code is the last dotted part before
+    ``.vtt``: ``ko``, ``ko-orig``, ``en-j3PyPqV-e1s`` (an uploader track).
+    Matching on this, not on a substring of the name, keeps an id such as
+    ``Xen4koQ`` from passing for an English or Korean file.
+    """
+    stem, dot, ext = path.name.rpartition(".")
+    if not dot or ext.lower() != "vtt" or "." not in stem:
+        return None
+    return stem.rpartition(".")[2].lower() or None
+
+
+def caption_base_lang(path: Path) -> str | None:
+    """``en`` for ``en``, ``en-orig`` and ``en-j3PyPqV-e1s``."""
+    lang = caption_lang(path)
+    return lang.split("-", 1)[0] if lang else None
 
 
 def format_ts(seconds: float) -> str:
@@ -229,7 +366,8 @@ def find_frame_source(run_dir: Path) -> Path:
         if p.is_file() and not p.name.endswith(".part") and p.suffix.lower() in VIDEO_SUFFIXES
     )
     if not candidates:
-        raise HarnessError("missing frame source video; run fetch_frame_source.py RUN_DIR first")
+        raise HarnessError("missing frame source video; run fetch_frame_source.py RUN_DIR first "
+                           "(add --with-audio for the study view). clean_run.py deletes it after delivery.")
     return candidates[0]
 
 
@@ -253,6 +391,13 @@ def group_selections(selected: dict) -> dict[str, list[dict]]:
     return grouped
 
 
+def selection_image_name(chapter_id: str, n: int, suffix: str) -> str:
+    """File name in images/ of a chapter's n-th selected frame (0-based); the first
+    keeps the legacy ``{chapter_id}`` name."""
+    name = chapter_id if n == 0 else f"{chapter_id}-{n + 1:02d}"
+    return f"{name}{suffix}"
+
+
 def place_selections(
     chapter_id: str, items: list[dict], internal_dir: Path, run_dir: Path, images_dir: Path
 ) -> dict[int | None, list[tuple[dict, Path]]]:
@@ -263,8 +408,24 @@ def place_selections(
         source = first_existing(internal_dir / sel["image_path"], run_dir / sel["image_path"])
         if not source.exists():
             raise HarnessError(f"selected image does not exist: {source}")
-        name = chapter_id if n == 0 else f"{chapter_id}-{n + 1:02d}"
-        target = images_dir / f"{name}{source.suffix}"
+        target = images_dir / selection_image_name(chapter_id, n, source.suffix)
         shutil.copy2(source, target)
         placed.setdefault(sel.get("after_bullet"), []).append((sel, target))
     return placed
+
+
+# ── 출력 페이지 공통 (references/design.md) ──
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+TOOL_URL = "https://github.com/bjw202/youtube-summarizer"
+
+
+def load_page_template(name: str) -> str:
+    """Read assets/<name> with the shared assets/base.css inlined at {{BASE_CSS}},
+    so every rendered page stays a single self-contained file."""
+    template = ASSETS_DIR / name
+    base_css = ASSETS_DIR / "base.css"
+    for path in (template, base_css):
+        if not path.exists():
+            raise HarnessError(f"page asset not found: {path}")
+    return template.read_text(encoding="utf-8").replace(
+        "{{BASE_CSS}}", base_css.read_text(encoding="utf-8"))
